@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: cloak-keeper
+    runtime: node
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @cloak/sdk build
+    startCommand: node services/keeper/index.mjs
+    envVars:
+      - key: KEEPER_PK
+        sync: false
+      - key: FACTORY
+        sync: false
+      - key: START_BLOCK
+        sync: false
+  - type: web
+    name: cloak-web
+    runtime: static
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @cloak/sdk build && pnpm --filter @cloak/web build
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_FACTORY
+        sync: false
+      - key: VITE_KEEPER_URL
+        sync: false

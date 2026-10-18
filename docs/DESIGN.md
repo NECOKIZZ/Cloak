@@ -133,3 +133,26 @@ The Groth16 circuits are **not** needed for the MVP.
 - Elysium docs: https://elysium.kinetiq.xyz/docs
 - Chainstack, What is Elysium: https://chainstack.com/what-is-elysium/
 - drand tlock-js: https://github.com/drand/tlock-js
+
+---
+
+## 8. Beyond launch: private trading on Elysium
+
+The launch auction is the shipped core. These items extend the same privacy story across a token's whole life.
+
+| Track | What it hides | How | Status |
+|---|---|---|---|
+| **Private buys (shielded funding)** | *Who* is trading | Port Veil's shielded pool (Groth16 2-in/2-out, Poseidon, relayer) to Elysium. Swaps and bids are paid from a shielded note via the relayer, and proceeds go back into the pool. Trade size and direction remain visible on the AMM. | Roadmap: circuits, contracts and relayer exist in Veil |
+| **Sealed batch trading** | *What* is traded, until the batch clears | Run the Cloak mechanism continuously: every 30–60 s, collect sealed buy and sell orders, clear them at one price against the pool, then open the next batch. No sandwiching, and sizes stay hidden until clearing. | Roadmap: reuses `CloakAuction` tick-walk and tlock reveal |
+| **Private perps vault** | *Whose* position | A shared HyperCore account funded from the shielded pool. Orders are batched through `ElysiumCoreWriter` intents placed by a keeper acting as a trade-only HyperCore agent. You trust the vault operator, and the aggregate position is public. | Roadmap: the market-data precompile lands ~4 weeks after mainnet |
+| **kHYPE bids** | — | Bid in liquid-staked HYPE so locked capital keeps earning yield. | Roadmap |
+
+## 9. What's built (status)
+
+- [x] `CloakAuction`, `CloakFactory`, `CloakToken`, `CloakPair`, with 12 Foundry tests including a solvency fuzz
+- [x] `@cloak/sdk`, with tlock sealing tested against the live drand quicknet
+- [x] Keeper service: auto-reveal, settle, push claims
+- [x] Launch page: sealed bid form, sealed→revealed demand curve, fair-launch record, trade, create launch
+- [x] e2e on anvil: 13 checks, real drand beacon
+- [ ] Elysium testnet deploy and real run (needs a funded `DEPLOYER_PK`)
+- [ ] Demo video
