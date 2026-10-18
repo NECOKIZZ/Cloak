@@ -1,0 +1,9 @@
+{
+  "name": "cloak",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @cloak/sdk build",
+    "test": "cd contracts && forge test"
+  }
+}

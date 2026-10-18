@@ -1,0 +1,9 @@
+{
+  "name": "@cloak/e2e",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cloak/sdk": "workspace:*",
+    "viem": "2.21.54"
+  }
+}
