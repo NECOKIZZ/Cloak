@@ -1,6 +1,7 @@
-# Demo video script (~2 min)
+# Demo video script (~2.5 min)
 
-**Setup before recording:** `anvil --balance 1000000 --block-time 1`, then `COMMIT_SECS=90 REVEAL_SECS=30 pnpm seed`, then start the keeper and the page (README → Local demo). If testnet is funded, use the Elysium deploy instead, so explorer links are real.
+**Setup before recording:** for the private segment, set `VITE_ROUTER` (testnet: in `apps/web/.env.production`) and run a keeper with `ROUTER` so `/relay` is live (`VITE_KEEPER_URL`).
+**Launch setup:** `anvil --balance 1000000 --block-time 1`, then `COMMIT_SECS=90 REVEAL_SECS=30 pnpm seed`, then start the keeper and the page (README → Local demo). If testnet is funded, use the Elysium deploy instead, so explorer links are real.
 
 | t | Screen | Voice-over |
 |---|---|---|
@@ -13,4 +14,7 @@
 | 1:20 | Settle → clearing line drops on the chart | "Settlement walks the price levels from the top until demand covers supply. That one price is what everyone pays: the bot who bid high, me, everyone." |
 | 1:35 | Fair-launch card: pool opening price = clearing price, LP burned | "Half the raise and matching tokens go into the pool at exactly that price, and the LP shares are burned. There's no first-block arbitrage and no rug." |
 | 1:47 | Your bids → claimed; Trade → Buy | "Tokens and refunds were pushed to every bidder, and trading is live." |
-| 1:55 | SDK snippet + "Ascend" | "Cloak is an SDK and factory any Elysium launchpad can plug in. Sealed bids, one price, locked liquidity." |
+| 1:52 | Private trading panel → Unlock private account (sign) → Shield 0.5 HYPE | "Launch is half the story. On a normal exchange, every trade is stamped with your wallet. With Cloak I sign once, and move HYPE into a private vault." |
+| 2:05 | Buy tab → Buy privately → status: "Generating zero-knowledge proof on this device…" | "My browser proves I own some private HYPE, without saying which. A relayer submits it." |
+| 2:15 | Explorer: the private-buy tx `from` = relayer, tokens into the shielded pool | "On-chain, the buyer is the relayer. My wallet isn't anywhere in this transaction. My SHADE balance is private." |
+| 2:25 | SDK snippet + "Ascend" | "Cloak is one SDK any Elysium launchpad can plug in: sealed-bid launches, locked liquidity, private trading." |
