@@ -366,7 +366,7 @@ export class Cloak {
   // ───────────── keeper side ─────────────
 
   async committedLogs(auction: Address, fromBlock = 0n) {
-    const latest = await this.publicClient.getBlockNumber();
+    const latest = await this.publicClient.getBlockNumber({ cacheTime: 0 });
     const get = (from: bigint, to: bigint) =>
       this.publicClient.getContractEvents({
         address: auction,

@@ -1,0 +1,127 @@
+// Private trading e2e with REAL Groth16 proofs: launch → enable private market → shield → private buy → private sell
+// → unshield to a fresh address. Asserts the trader's wallet never appears in any trade transaction.
+//   anvil --balance 1000000 & ; node e2e/private.mjs
+//   Elysium: RPC_URL=… DEPLOYER_PK=… FACTORY=0x… LAUNCH_INDEX=n [ROUTER=0x…] node e2e/private.mjs
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { generatePrivateKey } from "viem/accounts";
+import { anvilLocal, elysiumTestnet, CloakPrivate, createProver, walletSubmitter, relayerSubmitter, privateRouterAbi, cloakFactoryAbi } from "@cloak/sdk";
+import { Cloak, clients, deployFactory, deployPrivacy, fmt, parseEther, waitChainTime, waitDrand } from "./lib.mjs";
+
+const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8545";
+const local = RPC.includes("127.0.0.1") || RPC.includes("localhost");
+const chain = local ? anvilLocal : elysiumTestnet;
+const PK = process.env.DEPLOYER_PK ?? "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const RELAYER_PK = process.env.RELAYER_PK ?? (local ? "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" : PK);
+const scale = local ? 1n : 1000n; // testnet: amounts ÷ 1000
+const explorer = (h) => (local ? h : `${elysiumTestnet.blockExplorers.default.url}/tx/${h}`);
+let checks = 0;
+const ok = (c, m) => {
+  if (!c) throw new Error(`✗ ${m}`);
+  checks++;
+  console.log(`  ✓ ${m}`);
+};
+const txs = {};
+
+const d = clients(chain, RPC, PK);
+const mine = local ? () => d.publicClient.request({ method: "evm_mine", params: [] }) : undefined;
+console.log(`chain ${chain.name} (${chain.id})`);
+
+// 1. a settled launch (reuse one on testnet via FACTORY + LAUNCH_INDEX)
+let factory = process.env.FACTORY;
+let launchIndex = process.env.LAUNCH_INDEX !== undefined ? BigInt(process.env.LAUNCH_INDEX) : undefined;
+if (!factory || launchIndex === undefined) {
+  factory = factory ?? (await deployFactory(d.publicClient, d.walletClient)).factory;
+  const creator = new Cloak(d.publicClient, d.walletClient, factory);
+  const now = Number((await d.publicClient.getBlock()).timestamp);
+  const unit = 10n ** 14n / scale;
+  const l = await creator.createLaunch({ name: "Shade", symbol: "SHADE", saleSupply: 1_000_000n * 10n ** 18n, minPrice: unit, tickSize: unit, numTicks: 50, commitEnd: now + 12, revealEnd: now + 24, lpBps: 8000 });
+  const b = clients(chain, RPC, generatePrivateKey());
+  const q = creator.quoteBid(await creator.getAuction(l.auction), unit * 20n, 1_000_000n * 10n ** 18n);
+  await d.publicClient.waitForTransactionReceipt({ hash: await d.walletClient.sendTransaction({ to: b.account.address, value: q.cost + parseEther("0.01") }) });
+  await new Cloak(b.publicClient, b.walletClient).bid(l.auction, { maxPrice: unit * 20n, quantity: 1_000_000n * 10n ** 18n, deposit: q.cost });
+  const s = await creator.getAuction(l.auction);
+  await waitChainTime(d.publicClient, s.commitEnd, { mine });
+  await waitDrand(s.tlockRound);
+  await creator.revealAll(l.auction, { fromBlock: l.block });
+  await waitChainTime(d.publicClient, s.revealEnd, { mine });
+  if (mine) await mine();
+  await creator.settle(l.auction);
+  await creator.claimAll(l.auction, { fromBlock: l.block });
+  launchIndex = (await d.publicClient.readContract({ address: factory, abi: cloakFactoryAbi, functionName: "launchesCount" })) - 1n;
+  console.log(`launch ${l.auction} settled`);
+}
+
+// 2. privacy contracts + private market for the launch
+let router = process.env.ROUTER;
+let routerBlock = BigInt(process.env.ROUTER_BLOCK ?? 0);
+if (!router) {
+  const p = await deployPrivacy(d.publicClient, d.walletClient, factory);
+  router = p.router;
+  routerBlock = p.block;
+  txs.deployRouter = p.txHash;
+  console.log(`router ${router} · verifier ${p.verifier}`);
+}
+const [, token] = await d.publicClient.readContract({ address: factory, abi: cloakFactoryAbi, functionName: "launches", args: [launchIndex] });
+const existing = await d.publicClient.readContract({ address: router, abi: privateRouterAbi, functionName: "poolOf", args: [token] });
+if (existing === "0x0000000000000000000000000000000000000000") {
+  const h = await d.walletClient.writeContract({ address: router, abi: privateRouterAbi, functionName: "createPool", args: [launchIndex] });
+  await d.publicClient.waitForTransactionReceipt({ hash: h });
+  txs.createPool = h;
+}
+ok(true, "private market enabled for the launch token");
+
+// 3. trader: a public wallet that funds once, then trades privately via a relayer
+const trader = clients(chain, RPC, generatePrivateKey());
+await d.publicClient.waitForTransactionReceipt({ hash: await d.walletClient.sendTransaction({ to: trader.account.address, value: parseEther("2") / scale + parseEther("0.003") }) });
+const relayer = clients(chain, RPC, RELAYER_PK);
+const root = new URL("..", import.meta.url).pathname;
+const prover = createProver(readFileSync(`${root}apps/web/public/circuits/transaction2x2.wasm`), readFileSync(`${root}apps/web/public/circuits/transaction2x2_final.zkey`));
+const submit = process.env.RELAYER_URL ? relayerSubmitter(process.env.RELAYER_URL) : walletSubmitter(relayer.publicClient, relayer.walletClient, router);
+const keys = await CloakPrivate.keysFromWallet(trader.walletClient);
+const priv = new CloakPrivate(d.publicClient, router, keys, async () => prover, submit, routerBlock);
+const markets = await priv.loadMarkets();
+const hypePool = markets[0].pool;
+const tokenPool = priv.market(token).pool;
+
+const shieldAmt = parseEther("2") / scale;
+txs.shield = await priv.shieldHype(trader.walletClient, shieldAmt);
+ok((await priv.balance(hypePool)) === shieldAmt, `shielded ${fmt(shieldAmt, 4)} HYPE into a private balance`);
+
+const t0 = Date.now();
+const buy = await priv.buy(token, parseEther("1") / scale, { onStatus: (m) => console.log(`    · ${m}`) });
+txs.privateBuy = buy.txHash;
+console.log(`    proof + relay in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+const tokBal = await priv.balance(tokenPool);
+ok(tokBal >= buy.minOut && tokBal > 0n, `private buy: ${fmt(tokBal, 0)} SHADE now in private balance`);
+ok((await priv.balance(hypePool)) === shieldAmt - parseEther("1") / scale, "private HYPE change returned as a hidden note");
+
+const buyTx = await d.publicClient.getTransaction({ hash: buy.txHash });
+const buyRcpt = await d.publicClient.getTransactionReceipt({ hash: buy.txHash });
+const traderHex = trader.account.address.slice(2).toLowerCase();
+ok(buyTx.from.toLowerCase() === relayer.account.address.toLowerCase(), "trade sent by the relayer, not the trader");
+ok(!buyTx.input.toLowerCase().includes(traderHex) && !buyRcpt.logs.some((l) => (l.data + l.topics.join("")).toLowerCase().includes(traderHex)), "trader address appears nowhere in the trade's calldata or logs");
+
+const sell = await priv.sell(token, tokBal / 2n, { onStatus: (m) => console.log(`    · ${m}`) });
+txs.privateSell = sell.txHash;
+const hypeAfter = await priv.balance(hypePool);
+ok(hypeAfter > shieldAmt - parseEther("1") / scale, `private sell: private HYPE back up to ${fmt(hypeAfter, 4)}`);
+ok((await priv.balance(tokenPool)) === tokBal - tokBal / 2n, "remaining SHADE still private");
+
+const fresh = clients(chain, RPC, generatePrivateKey()).account.address;
+const out = parseEther("0.5") / scale;
+txs.unshield = await priv.unshieldHype(fresh, out, (m) => console.log(`    · ${m}`));
+ok((await d.publicClient.getBalance({ address: fresh })) === out, `unshielded ${fmt(out, 4)} HYPE to a brand-new address`);
+
+// a second trader can't see the first one's notes
+const other = new CloakPrivate(d.publicClient, router, await CloakPrivate.keysFromWallet(clients(chain, RPC, generatePrivateKey()).walletClient), async () => prover, submit, routerBlock);
+await other.loadMarkets();
+ok((await other.balance(hypePool)) === 0n && (await other.balance(tokenPool)) === 0n, "another account sees none of these notes");
+
+console.log(`\n${checks} checks passed`);
+if (!local) {
+  mkdirSync(new URL("../deployments", import.meta.url), { recursive: true });
+  const outj = { chainId: chain.id, factory, router, routerBlock: routerBlock.toString(), token, hypePool, tokenPool, txs: Object.fromEntries(Object.entries(txs).map(([k, v]) => [k, explorer(v)])) };
+  writeFileSync(new URL("../deployments/elysium-testnet-private.json", import.meta.url), JSON.stringify(outj, null, 2));
+  console.log(JSON.stringify(outj, null, 2));
+}
+process.exit(0); // snarkjs leaves worker threads alive
