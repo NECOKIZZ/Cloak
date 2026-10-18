@@ -1,0 +1,8 @@
+node_modules/
+contracts/out/
+contracts/cache/
+dist/
+.env
+.env.local
+.next/
+*.log
