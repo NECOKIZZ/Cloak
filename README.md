@@ -6,6 +6,28 @@ Built for the **Ascend hackathon** on Kinetiq's **Elysium** testnet (chain `9980
 
 ---
 
+## Live on Elysium testnet (chain `99801`)
+
+| Contract | Address |
+|---|---|
+| **CloakFactory** | [`0x1dc1ea9837ecbd31ec74f0d558e1db1c303a7e1c`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x1dc1ea9837ecbd31ec74f0d558e1db1c303a7e1c) |
+| **Live launch: Shade ($SHADE)**, bidding until Mon 20 Oct 18:00 UTC | [`0x62eD7ca5C77f779C25b88b4A68fD399DAab0b9b3`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x62eD7ca5C77f779C25b88b4A68fD399DAab0b9b3) |
+
+**A full real run on testnet** (`pnpm e2e`, 13/13 checks): 5 fresh bidders, sealed bids, keeper auto-reveal from the drand beacon, one clearing price, pool seeded at that price with the LP burned, then the first trade:
+
+| Step | Transaction |
+|---|---|
+| Create launch | [0xa50c…0c7a](https://elysium.kinetiq.xyz/testnet-explorer/tx/0xa50c90dc8bdc3d16117208db562fdcaf01c14df8b98941bb7bdc48b2d1de0c7a) |
+| Sealed bid (one of 5): only a hash + timelock ciphertext | [0xfdb2…82a9](https://elysium.kinetiq.xyz/testnet-explorer/tx/0xfdb235c27e76f17dbe5409d8b8704c3ddf0eafa9f6a844cc8bd2c0374da382a9) |
+| Keeper opens all 5 bids (no bidder action) | [0xc218…94b2](https://elysium.kinetiq.xyz/testnet-explorer/tx/0xc2185869b25408a7b80412c0653bbe11916ee6ef99eca3a6cafb401e08a094b2) |
+| Settle: clearing price, LP seeded at it, unused tokens burned | [0x3963…2f18](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x39637ad1096b237ec5095722a647d3b3490fdf2500dfaa64f43be169b14f2f18) |
+| Claims pushed to every bidder | [0x53f7…2154](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x53f79abf41f3461650833cb8aad386e4476bc4594d5f4e2170fdaf9327e22154) |
+| First trade on the pool | [0x11de…a7e2](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x11de2c033b7919752ee0af4ddf51274683a9fb77e80a2bb9a48b77f8f9faa7e2) |
+
+That run's addresses: auction `0xE11293758BF75b84Acd6cae98669642FcFB8760F`, token `0x7e65c418e4E3CDdB1C3C8a9bD2dcE336AC7fd17D`, pool `0xA0642f3c039a7be8360A455b18910c575Cf0bF1E` (all in [`deployments/elysium-testnet.json`](deployments/elysium-testnet.json)).
+
+No keeper is required: once the drand round is out, the launch page shows **Open all sealed bids**, so anyone can reveal from the browser.
+
 ## Why Elysium needs this
 
 Elysium runs a **single sequencer that orders by priority fee**, with ~300 ms blocks and no public mempool. On a first-come or bonding-curve launch, the first block becomes a gas auction that bots win. The sequencer and the AnyTrust data committee also see every transaction in plain text, so privacy has to come from the app. Timeboost (planned) will make ordering openly purchasable.
@@ -16,7 +38,7 @@ Cloak makes a launch **indifferent to who orders it**:
 |---|---|
 | **Sealed bids** | `commit(hash, sealedBid)`: on-chain there is only a keccak hash plus a drand-timelock ciphertext. Price and size are invisible to bots, other bidders and the sequencer. |
 | **Bids reveal themselves** | Each bid is encrypted with [tlock](https://github.com/drand/tlock-js) to the drand quicknet round that fires when bidding ends. After that, **anyone** (the keeper, another bidder, the page) can decrypt it and call `reveal`. The contract only checks the hash, so a decryptor can open a bid but never change it. There is no "come back and reveal" step. |
-| **Hidden bid size** | Deposits are over-collateralised into budget buckets (1/2/5/10/25… HYPE). Your real bid can be anything below your deposit, and the excess is refunded. |
+| **Hidden bid size** | Deposits are rounded up to 1/2/5 × 10ⁿ buckets at any price scale. Your real bid can be anything below your deposit, and the excess is refunded, so a deposit only reveals the order of magnitude. |
 | **One clearing price** | `settle()` walks up to 256 price ticks from high to low. The first tick where demand covers supply sets the price for **everyone**. Bids at that tick fill pro rata, and lower bids are refunded in full. Gas is O(ticks), not O(bids). |
 | **Liquidity at the discovered price** | Part of the raise (`lpBps`), plus matching tokens, seeds a `CloakPair` **at exactly the clearing price**, so there is no first-block arbitrage. LP shares are **burned** or **time-locked** in the auction contract. Unsold tokens are burned. |
 | **Fair-launch record** | `FairLaunch` event: clearing price, sold, raised, LP amounts and lock, bidder count. The page renders it as a verified badge, and a launchpad (Ascend's HyperCore graduation criteria) can read it straight from chain. |

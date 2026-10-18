@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sealBid, unsealBid, drandRoundAt, drandRoundTime, commitmentOf, Cloak, bucketDeposit } from "../dist/index.js";
+import { sealBid, unsealBid, drandRoundAt, drandRoundTime, commitmentOf, Cloak, bucketDeposit, budgetBuckets } from "../dist/index.js";
 
 const preimage = {
   auction: "0x1111111111111111111111111111111111111111",
@@ -29,8 +29,11 @@ test("quote picks the tick at or below max price and buckets the deposit", () =>
   const q = c.quoteBid({ minPrice: 10n ** 14n, tickSize: 10n ** 14n, numTicks: 100 }, 25n * 10n ** 13n, 1000n * 10n ** 18n);
   assert.equal(q.tick, 1); // 0.00025 → tick 1 (0.0002)
   assert.equal(q.cost, 2n * 10n ** 17n);
-  assert.equal(q.deposit, 10n ** 18n);
+  assert.equal(q.deposit, 2n * 10n ** 17n);
   assert.equal(bucketDeposit(3n * 10n ** 18n), 5n * 10n ** 18n);
+  assert.equal(bucketDeposit(26n * 10n ** 13n), 5n * 10n ** 14n);
+  assert.equal(bucketDeposit(10n ** 15n), 10n ** 15n);
+  assert.deepEqual(budgetBuckets(3n, 4), [5n, 10n, 20n, 50n]);
 });
 
 test("commitment matches the contract encoding shape", () => {

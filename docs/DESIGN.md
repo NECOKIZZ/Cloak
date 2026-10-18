@@ -154,5 +154,5 @@ The launch auction is the shipped core. These items extend the same privacy stor
 - [x] Keeper service: auto-reveal, settle, push claims
 - [x] Launch page: sealed bid form, sealed→revealed demand curve, fair-launch record, trade, create launch
 - [x] e2e on anvil: 13 checks, real drand beacon
-- [ ] Elysium testnet deploy and real run (needs a funded `DEPLOYER_PK`)
+- [x] Elysium testnet deploy and real run (13/13 checks; links in README)
 - [ ] Demo video

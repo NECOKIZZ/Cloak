@@ -3,7 +3,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { Cloak, type BidSecret, type Wallet } from "@cloak/sdk";
 import { chain, FACTORY, IS_LOCAL, RPC_URL } from "./config";
 
-export const publicClient = createPublicClient({ chain, transport: http(RPC_URL), pollingInterval: 500 });
+export const publicClient = createPublicClient({ chain, transport: http(RPC_URL, { retryCount: 4, retryDelay: 400 }), batch: { multicall: { wait: 16 } }, pollingInterval: 1000 });
 export const readCloak = new Cloak(publicClient, undefined, FACTORY);
 
 declare global {

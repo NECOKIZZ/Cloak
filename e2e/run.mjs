@@ -12,8 +12,8 @@ const chain = local ? anvilLocal : elysiumTestnet;
 const PK = process.env.DEPLOYER_PK ?? "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // anvil #0
 const COMMIT_SECS = Number(process.env.COMMIT_SECS ?? (local ? 25 : 60));
 const REVEAL_SECS = Number(process.env.REVEAL_SECS ?? (local ? 20 : 45));
-const N_BIDDERS = Number(process.env.BIDDERS ?? 5);
-const BIDDER_FUNDS = parseEther(process.env.BIDDER_FUNDS ?? (local ? "3000" : "0.05"));
+const BIDDER_FUNDS = parseEther(process.env.BIDDER_FUNDS ?? "3000");
+const GAS_BUFFER = parseEther(process.env.GAS_BUFFER ?? "0.002");
 
 let checks = 0;
 const ok = (cond, msg) => {
@@ -54,14 +54,7 @@ console.log(`auction ${launch.auction} · token ${launch.token}`);
 let s = await creator.getAuction(launch.auction);
 ok(s.phase === "commit", "launch is in commit phase");
 
-// Fund bidders with fresh keys.
 const bidders = [];
-for (let i = 0; i < N_BIDDERS; i++) {
-  const c = clients(chain, RPC, generatePrivateKey());
-  const h = await deployer.walletClient.sendTransaction({ to: c.account.address, value: BIDDER_FUNDS });
-  await deployer.publicClient.waitForTransactionReceipt({ hash: h });
-  bidders.push({ ...c, cloak: new Cloak(c.publicClient, c.walletClient) });
-}
 
 // Sealed bids: max price in ticks above min, quantity in tokens. Sum > supply → oversubscribed.
 const plan = [
@@ -70,7 +63,7 @@ const plan = [
   [12n, 250_000n],
   [12n, 250_000n], // marginal tick → pro rata
   [5n, 300_000n], // below clearing → full refund
-].slice(0, N_BIDDERS);
+];
 const secrets = [];
 for (let i = 0; i < plan.length; i++) {
   const [ticksAbove, qty] = plan[i];
@@ -78,6 +71,12 @@ for (let i = 0; i < plan.length; i++) {
   const quantity = qty * 10n ** 18n;
   const q = creator.quoteBid(s, maxPrice, quantity);
   const deposit = local ? q.deposit : q.cost + (q.cost / 5n) + 1n; // testnet: cost + 20% blur
+  // fresh wallet per bidder, funded with its deposit + gas (local: a flat amount)
+  const c = clients(chain, RPC, generatePrivateKey());
+  const fund = local ? BIDDER_FUNDS : deposit + GAS_BUFFER;
+  const fh = await deployer.walletClient.sendTransaction({ to: c.account.address, value: fund });
+  await deployer.publicClient.waitForTransactionReceipt({ hash: fh });
+  bidders.push({ ...c, cloak: new Cloak(c.publicClient, c.walletClient) });
   const secret = await bidders[i].cloak.bid(launch.auction, { maxPrice, quantity, deposit });
   secrets.push(secret);
   txs[`commit${i}`] = secret.txHash;
@@ -90,7 +89,7 @@ console.log(`waiting for commit to close + drand round ${s.tlockRound}…`);
 await waitChainTime(deployer.publicClient, s.commitEnd, { mine });
 await waitDrand(s.tlockRound);
 // Bidders are gone — nobody reveals manually. The keeper opens every bid from the public beacon.
-const r = await creator.revealAll(launch.auction, { log: (m) => console.log(`  keeper: ${m}`) });
+const r = await creator.revealAll(launch.auction, { fromBlock: launch.block, log: (m) => console.log(`  keeper: ${m}`) });
 txs.revealBatch = r.txs[0];
 s = await creator.getAuction(launch.auction);
 ok(s.reveals === plan.length, "keeper auto-revealed every sealed bid (no bidder action)");
@@ -103,7 +102,7 @@ ok(s.settled && !s.failed, "settled");
 console.log(`  clearing price ${fmt(s.clearingPrice, 9)} HYPE/token · sold ${fmt(s.sold, 0)} · raised ${fmt(s.raised)} HYPE`);
 ok(s.clearingTick === 12, "clearing tick is the marginal bid level");
 
-const claim = await creator.claimAll(launch.auction);
+const claim = await creator.claimAll(launch.auction, { fromBlock: launch.block });
 txs.claimAll = claim.txs[0];
 const tokenOf = (a) =>
   deployer.publicClient.readContract({ address: s.token, abi: cloakTokenAbi, functionName: "balanceOf", args: [a] });

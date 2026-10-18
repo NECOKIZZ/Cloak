@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { parseEther, type Address, type Hex } from "viem";
-import { BUDGET_BUCKETS, cloakAuctionAbi, cloakPairAbi, cloakTokenAbi, type AuctionState, type Wallet, Cloak } from "@cloak/sdk";
+import { formatEther, parseEther, type Address, type Hex } from "viem";
+import { budgetBuckets, cloakAuctionAbi, cloakPairAbi, cloakTokenAbi, type AuctionState, type Wallet, Cloak } from "@cloak/sdk";
 import { FACTORY, txLink } from "./config";
 import { hype, short, tokens } from "./format";
 import { loadSecrets, publicClient, saveSecret } from "./wallet";
@@ -82,7 +82,7 @@ export function DemandChart({ s, curve }: { s: AuctionState; curve: bigint[] }) 
 // ───────────────────────────── bid ─────────────────────────────
 
 export function BidCard({ s, wallet, onDone }: { s: AuctionState; wallet: Wallet | null; onDone: () => void }) {
-  const defaultPrice = hype(s.minPrice + BigInt(Math.floor(s.numTicks / 4)) * s.tickSize, 18);
+  const defaultPrice = formatEther(s.minPrice + BigInt(Math.floor(s.numTicks / 4)) * s.tickSize);
   const [maxPrice, setMaxPrice] = useState(defaultPrice);
   const [qty, setQty] = useState("10000");
   const [bucket, setBucket] = useState<bigint | null>(null);
@@ -146,7 +146,7 @@ export function BidCard({ s, wallet, onDone }: { s: AuctionState; wallet: Wallet
           <span>excess refunded</span>
         </label>
         <div className="buckets">
-          {BUDGET_BUCKETS.map((b) => (
+          {(quote ? budgetBuckets(quote.cost, 6) : []).map((b) => (
             <button
               key={b.toString()}
               className={`bucket ${deposit === b ? "on" : ""}`}

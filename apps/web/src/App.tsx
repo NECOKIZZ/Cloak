@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
-import { Cloak, cloakAuctionAbi, type AuctionState, type Wallet } from "@cloak/sdk";
+import { Cloak, cloakAuctionAbi, drandRoundTime, type AuctionState, type Wallet } from "@cloak/sdk";
 import { BidCard, CreateLaunch, DemandChart, FairLaunchCard, LaunchList, MyBids, TradeCard } from "./components";
 import { addrLink, chain, FACTORY, IS_LOCAL, KEEPER_URL } from "./config";
 import { duration, hype, short, tokens } from "./format";
@@ -29,6 +29,7 @@ export function App() {
   const [err, setErr] = useState("");
   const [keeper, setKeeper] = useState<{ keeper: string } | null>(null);
   const [settling, setSettling] = useState(false);
+  const [revealing, setRevealing] = useState("");
 
   // default to the newest launch
   useEffect(() => {
@@ -62,7 +63,7 @@ export function App() {
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 2500);
+    const t = setInterval(refresh, 4000);
     return () => clearInterval(t);
   }, [refresh]);
   useEffect(() => {
@@ -92,6 +93,19 @@ export function App() {
       setErr((e as { shortMessage?: string }).shortMessage ?? (e as Error).message);
     } finally {
       setSettling(false);
+    }
+  }
+
+  async function revealAllNow() {
+    if (!wallet || !s) return;
+    setRevealing("Decrypting sealed bids with the drand beacon…");
+    try {
+      const r = await new Cloak(publicClient, wallet).revealAll(s.address, { log: (m) => setRevealing(m) });
+      setRevealing(r.revealed ? `Opened ${r.revealed} sealed bids.` : "Nothing left to open.");
+      await refresh();
+    } catch (e) {
+      setRevealing("");
+      setErr((e as { shortMessage?: string }).shortMessage ?? (e as Error).message);
     }
   }
 
@@ -191,6 +205,15 @@ export function App() {
                   Sealed bids open themselves: the drand beacon publishes round #{s.tlockRound}, and any keeper decrypts and reveals every bid.
                   {keeper && <> Keeper <span className="mono">{short(keeper.keeper)}</span> is online.</>}
                 </p>
+                {s.phase === "reveal" && s.reveals < s.commits && now >= drandRoundTime(s.tlockRound) && (
+                  <>
+                    <p className="mute small">No keeper needed: you can open every bid yourself. It only needs the public beacon.</p>
+                    <button className="btn btn-ghost btn-block" disabled={!wallet || (!!revealing && !revealing.startsWith("Opened") && !revealing.startsWith("Nothing"))} onClick={revealAllNow}>
+                      {wallet ? "Open all sealed bids" : "Connect a wallet to open bids"}
+                    </button>
+                  </>
+                )}
+                {revealing && <div className="okmsg">{revealing}</div>}
               </div>
             )}
             <CreateLaunch wallet={wallet} onCreated={pick} />

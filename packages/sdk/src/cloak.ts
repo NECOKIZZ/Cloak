@@ -91,8 +91,26 @@ export interface BidQuote {
 
 const PHASES = ["commit", "reveal", "settle", "settled"] as const;
 
-/** Budget buckets: deposits are rounded up to one of these so the deposit itself does not reveal the bid. */
-export const BUDGET_BUCKETS = [1n, 2n, 5n, 10n, 25n, 50n, 100n, 250n, 500n, 1000n].map((x) => x * WAD);
+/**
+ * Budget buckets: deposits are rounded up to 1, 2 or 5 × 10ⁿ wei, so the deposit only reveals the bid's order of
+ * magnitude (every bid within ~2.5× of another looks the same) at any price scale.
+ */
+export function budgetBuckets(atLeast: bigint, count = 8): bigint[] {
+  const out: bigint[] = [];
+  let b = bucketDeposit(atLeast > 0n ? atLeast : 1n);
+  while (out.length < count) {
+    out.push(b);
+    b = nextBucket(b);
+  }
+  return out;
+}
+
+function nextBucket(b: bigint): bigint {
+  const s = b.toString();
+  const lead = s[0];
+  const pow = 10n ** BigInt(s.length - 1);
+  return lead === "1" ? 2n * pow : lead === "2" ? 5n * pow : 10n * pow;
+}
 
 export function commitmentOf(auction: Address, bidder: Address, tick: number, quantity: bigint, salt: Hex): Hex {
   return keccak256(
@@ -109,9 +127,12 @@ export function randomSalt(): Hex {
   return toHex(b);
 }
 
-/** Round a required deposit up to the next budget bucket (or keep it if it exceeds them all). */
+/** Round a required deposit up to the next 1/2/5 × 10ⁿ bucket. */
 export function bucketDeposit(cost: bigint): bigint {
-  return BUDGET_BUCKETS.find((b) => b >= cost) ?? cost;
+  if (cost <= 1n) return 1n;
+  const pow = 10n ** BigInt(cost.toString().length - 1);
+  for (const m of [1n, 2n, 5n, 10n]) if (m * pow >= cost) return m * pow;
+  return 10n * pow;
 }
 
 export class Cloak {
