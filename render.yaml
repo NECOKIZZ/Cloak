@@ -11,6 +11,8 @@ services:
         sync: false
       - key: START_BLOCK
         sync: false
+      - key: ROUTER
+        value: "0xfa2574cfc3afb8f7d3a0651fa2111ff4e3d2fc41"
   - type: web
     name: cloak-web
     runtime: static
@@ -20,4 +22,6 @@ services:
       - key: VITE_FACTORY
         sync: false
       - key: VITE_KEEPER_URL
+        sync: false
+      - key: VITE_RELAYER_URL
         sync: false

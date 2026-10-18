@@ -1,6 +1,8 @@
-# Cloak: sealed-bid launches for Elysium
+# Cloak: private launches and private trading for Elysium
 
-> **Launches nobody can snipe.** Bids stay sealed until bidding closes, hidden even from the sequencer. Every winner pays **one clearing price**, and liquidity is seeded at that price and locked by the contract.
+> **Launches nobody can snipe, and trades nobody can trace.** Bids stay sealed until bidding closes, hidden even from the sequencer. Every winner pays **one clearing price**, and liquidity is seeded at that price and locked by the contract. After launch, anyone can hold, buy and sell the token **from a private balance**: trades are proven on your device and sent by a relayer, so your wallet never appears on them.
+
+Plain-English walkthrough: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
 Built for the **Ascend hackathon** on Kinetiq's **Elysium** testnet (chain `99801`). Ported from [Veil](https://github.com/Bob-Elly/Veil), our Monad Metropolis private-payments project.
 
@@ -28,6 +30,39 @@ That run's addresses: auction `0xE11293758BF75b84Acd6cae98669642FcFB8760F`, toke
 
 No keeper is required: once the drand round is out, the launch page shows **Open all sealed bids**, so anyone can reveal from the browser.
 
+## Private trading (Gloam-style, for launch tokens)
+
+Veil (our Monad project) and [Gloam](https://gloam.trade) give stablecoins private balances. Cloak extends that to **trading launchpad tokens**:
+
+```
+ your wallet ──shield──▶ private HYPE ──private buy──▶ private $TOKEN ──private sell──▶ private HYPE ──withdraw──▶ any fresh address
+   (public, once)          (hidden)      (relayer)        (hidden)        (relayer)        (hidden)       (relayer)
+```
+
+- **ShieldedPool** (ported from Veil): one per asset (WHYPE plus each launch token). A balance is a set of encrypted notes. Spending one needs a Groth16 proof (2-in/2-out circuit, Poseidon Merkle tree) generated **on your device** in about 3–4 s.
+- **PrivateRouter**: a private buy spends a WHYPE note, swaps through the launch's own `CloakPair`, and deposits the tokens as a new note for you. A private sell does the reverse. The swap instructions (pair, output pool, min out, your output note) are inside `ExtData.data`, which **the proof commits to**, so the relayer can submit your trade but cannot change it.
+- **One-time keys**: every note that enters a pool publicly (your shield deposit, every swap output) goes to a fresh key derived from your account, so those entries can't be linked to each other or to your main key.
+- **Your account** comes from one wallet signature (free, no transaction). Nothing is stored on a server.
+- **Relayer** (`services/keeper`, `POST /relay`): dry-runs your call, then submits it and pays gas. It is the on-chain sender of every private trade.
+- **Only real Cloak launches**: pools can only be created for a settled launch from the Cloak factory, and the router only swaps through that launch's pair.
+
+| Live on Elysium testnet | |
+|---|---|
+| **PrivateRouter** | [`0xfa2574cfc3afb8f7d3a0651fa2111ff4e3d2fc41`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xfa2574cfc3afb8f7d3a0651fa2111ff4e3d2fc41) |
+| Shielded HYPE pool | [`0xCDD04c1c2aEc00728995C151127D619990885715`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xCDD04c1c2aEc00728995C151127D619990885715) |
+| Shielded $CLOAK pool | [`0x5AB75B030adD2D9814F48D51585eBb9e42BBC721`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x5AB75B030adD2D9814F48D51585eBb9e42BBC721) |
+
+**A real private-trading run on testnet** (`e2e/private.mjs`, 10/10 checks, real proofs):
+
+| Step | Transaction | What the chain sees |
+|---|---|---|
+| Shield 0.002 HYPE | [0x51a6…75e5](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x51a61a2395266b5b0b3ed3d3091a3c43fd6e686cd08572b34b03107ae64775e5) | a wallet deposited to a one-time key |
+| Private buy | [0x1d25…ec30](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x1d2506221f6a04f32c401d1a2dc32ed579f207b0a5a2181ed3dee79f1dd3ec30) | **the relayer** bought tokens into the shielded pool |
+| Private sell | [0xb0c1…7ff3](https://elysium.kinetiq.xyz/testnet-explorer/tx/0xb0c10c24cb2599f35bba714e669810958eca7b860cdd3f239adc2c4211647ff3) | **the relayer** sold tokens from the shielded pool |
+| Withdraw to a brand-new address | [0x2008…04e5](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x2008d9d408582953a3cec2742d06292eb8022368985440fd59bb49e2fed804e5) | HYPE arrived at an address with no history |
+
+The test checks that the trader's address appears **nowhere** in the trades' calldata or logs, and that a second account sees none of the first account's notes.
+
 ## Why Elysium needs this
 
 Elysium runs a **single sequencer that orders by priority fee**, with ~300 ms blocks and no public mempool. On a first-come or bonding-curve launch, the first block becomes a gas auction that bots win. The sequencer and the AnyTrust data committee also see every transaction in plain text, so privacy has to come from the app. Timeboost (planned) will make ordering openly purchasable.
@@ -48,10 +83,13 @@ Cloak makes a launch **indifferent to who orders it**:
 
 ```
 contracts/         Foundry: CloakAuction, CloakFactory, CloakToken (fixed supply, no owner), CloakPair (HYPE/token AMM)
-packages/sdk/      @cloak/sdk: createLaunch, bid (tlock-sealed), reveal, revealAll (keeper), settle, claimAll, reads
-services/keeper/   Watches a factory: auto-reveals after the drand round, settles, pushes claims. Anyone can run one.
+contracts/src/shielded/  ShieldedPool, PrivateRouter, WHYPE, Groth16 verifier, Merkle tree (ported from Veil)
+circuits/          transaction2x2.circom (2-in/2-out notes); built artifacts in apps/web/public/circuits
+packages/sdk/      @cloak/sdk: launches (createLaunch, bid, revealAll, settle, claimAll) + CloakPrivate
+                   (shieldHype, buy, sell, unshieldHype, balances, on-device prover, relayer client)
+services/keeper/   Auto-reveals after the drand round, settles, pushes claims, and relays private trades (POST /relay).
 apps/web/          The launch page (Vite + React): sealed bid form, sealed→revealed demand curve, fair-launch card, trade, create
-e2e/               run.mjs (full flow, 13 checks), seed.mjs (demo launch with bots), deploy.mjs
+e2e/               run.mjs (launch flow, 13 checks), private.mjs (private trading, 10 checks), seed.mjs, deploy.mjs
 docs/DESIGN.md     Research, design, roadmap
 ```
 
@@ -85,11 +123,12 @@ Prerequisites: Node ≥ 20, pnpm, Foundry.
 
 ```bash
 pnpm install && pnpm build
-pnpm test                                   # 12 Foundry tests (incl. a solvency fuzz) + SDK tests against live drand
+pnpm test                                   # 20 Foundry tests (auction incl. solvency fuzz, private router) + SDK tests against live drand
 
 # full flow on a local chain (uses the real drand beacon)
 anvil --balance 1000000 &
 pnpm e2e                                    # 13 checks: commit → auto-reveal → settle → pro rata → LP at clearing price → trade
+node e2e/private.mjs                        # 10 checks with real proofs: shield → private buy → private sell → withdraw
 ```
 
 Local demo with the page:
@@ -115,12 +154,21 @@ cd apps/web && VITE_FACTORY=0x… pnpm build  # static site; render.yaml deploys
 
 ## Honest limits
 
+**Private trading**
+- **Hidden:** who traded, what each account holds, and which trades belong together. **Visible:** each trade's size and direction on the AMM (the pool is public), shield deposits (a wallet put X HYPE in) and withdrawals (an address got Y out).
+- **Timing can still link you.** Shielding 1 HYPE and immediately buying with exactly 1 HYPE is easy to connect, especially while few people use the pools. Wait, and trade different amounts.
+- **Relayer trust:** the relayer can refuse or delay your trade, and it sees your IP. It cannot steal, alter or redirect anything, because the proof binds every field. Anyone can run one.
+- **Trusted setup:** the Groth16 keys come from Veil's development ceremony. Production would need a public multi-party ceremony.
+- **Not hidden from front-running:** trades hit the public AMM with a 1% slippage limit. Sealed batch trading (roadmap) would also hide trades until they clear.
+
+**Launch auction**
+
 - Sealed bids stop **ordering** games, not **many-wallet** games. Uniform pricing removes most of the reason to split bids, though.
 - tlock relies on the drand League of Entropy threshold network. A threshold collusion could decrypt early.
 - The sequencer can delay transactions. The reveal window, anyone-can-reveal and Elysium's delayed-inbox forced inclusion mitigate this.
 - Deposits are visible; buckets only blur them. Unlinkable funding through a Veil-style private pool is on the roadmap.
 - Not audited. Testnet only.
 
-## Roadmap: privacy beyond the launch
+## Roadmap
 
-See [docs/DESIGN.md](docs/DESIGN.md#8-beyond-launch-private-trading-on-elysium): private buys funded from a shielded pool (Veil port), sealed batch auctions for post-launch trading (the same mechanism every N seconds), a private perps vault on HyperCore, and kHYPE bids.
+See [docs/DESIGN.md](docs/DESIGN.md#8-beyond-launch-private-trading-on-elysium): **sealed batch trading** (private trades that also hide size until they clear, the same tlock mechanism every N seconds), private bids funded straight from a shielded balance, private sends and claim links (Veil), a private perps vault on HyperCore, and kHYPE bids.

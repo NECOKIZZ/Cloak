@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
 import { Cloak, cloakAuctionAbi, drandRoundTime, type AuctionState, type Wallet } from "@cloak/sdk";
 import { BidCard, CreateLaunch, DemandChart, FairLaunchCard, LaunchList, MyBids, TradeCard } from "./components";
+import { PrivateCard } from "./private";
 import { addrLink, chain, FACTORY, IS_LOCAL, KEEPER_URL } from "./config";
 import { duration, hype, short, tokens } from "./format";
 import { connectBurner, connectInjected, publicClient, readCloak } from "./wallet";
@@ -197,6 +198,7 @@ export function App() {
           </div>
           <div className="col">
             {s?.phase === "commit" && <BidCard s={s} wallet={wallet} onDone={refresh} />}
+            {s && <PrivateCard s={s} wallet={wallet} />}
             {s && <TradeCard s={s} wallet={wallet} />}
             {s && s.phase !== "commit" && !s.settled && (
               <div className="card">

@@ -367,7 +367,7 @@ export function TradeCard({ s, wallet }: { s: AuctionState; wallet: Wallet | nul
 
   return (
     <div className="card">
-      <div className="card-head"><h3>Trade</h3><span className="pill ok">live</span></div>
+      <div className="card-head"><h3>Public trade</h3><span className="pill ok">live</span></div>
       <div className="tabs">
         <button className={`tab ${side === "buy" ? "on" : ""}`} onClick={() => setSide("buy")}>Buy</button>
         <button className={`tab ${side === "sell" ? "on" : ""}`} onClick={() => setSide("sell")}>Sell</button>

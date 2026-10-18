@@ -4,7 +4,7 @@
 //   Elysium: RPC_URL=… DEPLOYER_PK=… FACTORY=0x… LAUNCH_INDEX=n [ROUTER=0x…] node e2e/private.mjs
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { generatePrivateKey } from "viem/accounts";
-import { anvilLocal, elysiumTestnet, CloakPrivate, createProver, walletSubmitter, relayerSubmitter, privateRouterAbi, cloakFactoryAbi } from "@cloak/sdk";
+import { anvilLocal, elysiumTestnet, CloakPrivate, createProver, walletSubmitter, relayerSubmitter, privateRouterAbi, cloakFactoryAbi, cloakTokenAbi } from "@cloak/sdk";
 import { Cloak, clients, deployFactory, deployPrivacy, fmt, parseEther, waitChainTime, waitDrand } from "./lib.mjs";
 
 const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8545";
@@ -62,6 +62,7 @@ if (!router) {
   console.log(`router ${router} · verifier ${p.verifier}`);
 }
 const [, token] = await d.publicClient.readContract({ address: factory, abi: cloakFactoryAbi, functionName: "launches", args: [launchIndex] });
+const SYM = await d.publicClient.readContract({ address: token, abi: cloakTokenAbi, functionName: "symbol" });
 const existing = await d.publicClient.readContract({ address: router, abi: privateRouterAbi, functionName: "poolOf", args: [token] });
 if (existing === "0x0000000000000000000000000000000000000000") {
   const h = await d.walletClient.writeContract({ address: router, abi: privateRouterAbi, functionName: "createPool", args: [launchIndex] });
@@ -92,7 +93,7 @@ const buy = await priv.buy(token, parseEther("1") / scale, { onStatus: (m) => co
 txs.privateBuy = buy.txHash;
 console.log(`    proof + relay in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 const tokBal = await priv.balance(tokenPool);
-ok(tokBal >= buy.minOut && tokBal > 0n, `private buy: ${fmt(tokBal, 0)} SHADE now in private balance`);
+ok(tokBal >= buy.minOut && tokBal > 0n, `private buy: ${fmt(tokBal, 0)} ${SYM} now in private balance`);
 ok((await priv.balance(hypePool)) === shieldAmt - parseEther("1") / scale, "private HYPE change returned as a hidden note");
 
 const buyTx = await d.publicClient.getTransaction({ hash: buy.txHash });
@@ -105,7 +106,7 @@ const sell = await priv.sell(token, tokBal / 2n, { onStatus: (m) => console.log(
 txs.privateSell = sell.txHash;
 const hypeAfter = await priv.balance(hypePool);
 ok(hypeAfter > shieldAmt - parseEther("1") / scale, `private sell: private HYPE back up to ${fmt(hypeAfter, 4)}`);
-ok((await priv.balance(tokenPool)) === tokBal - tokBal / 2n, "remaining SHADE still private");
+ok((await priv.balance(tokenPool)) === tokBal - tokBal / 2n, `remaining ${SYM} still private`);
 
 const fresh = clients(chain, RPC, generatePrivateKey()).account.address;
 const out = parseEther("0.5") / scale;

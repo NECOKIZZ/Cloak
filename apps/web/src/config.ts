@@ -14,3 +14,7 @@ export const KEEPER_URL: string | undefined = env.VITE_KEEPER_URL || undefined;
 export const EXPLORER = IS_LOCAL ? undefined : elysiumTestnet.blockExplorers.default.url;
 export const txLink = (h: string) => (EXPLORER ? `${EXPLORER}/tx/${h}` : undefined);
 export const addrLink = (a: string) => (EXPLORER ? `${EXPLORER}/address/${a}` : undefined);
+export const ROUTER = (env.VITE_ROUTER || undefined) as Address | undefined;
+export const ROUTER_BLOCK = BigInt(env.VITE_ROUTER_BLOCK || 0);
+/** Cloak keeper with `/relay` (submits private trades so the trader's wallet never appears). */
+export const RELAYER_URL: string | undefined = env.VITE_RELAYER_URL || env.VITE_KEEPER_URL || undefined;
