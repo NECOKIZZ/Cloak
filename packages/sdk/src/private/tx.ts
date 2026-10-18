@@ -63,6 +63,35 @@ export const SWAP_DATA_ABI = [
   },
 ] as const;
 
+export const ORDER_DATA_ABI = [
+  {
+    type: "tuple",
+    components: [
+      { name: "token", type: "address" },
+      { name: "outPubKey", type: "uint256" },
+      { name: "outBlinding", type: "uint256" },
+      { name: "outMemo", type: "bytes" },
+    ],
+  },
+] as const;
+
+/**
+ * Split an amount into at most `maxOrders` standard sizes (1, 2, 5 × 10ⁿ), largest first. Everyone's orders come
+ * from the same small set of sizes, so no order stands out.
+ */
+export function splitStandard(amount: bigint, maxOrders = 6): { sizes: bigint[]; rest: bigint } {
+  const sizes: bigint[] = [];
+  let rest = amount;
+  while (rest > 0n && sizes.length < maxOrders) {
+    const pow = 10n ** BigInt(rest.toString().length - 1);
+    const lead = rest / pow; // 1..9
+    const d = lead >= 5n ? 5n : lead >= 2n ? 2n : 1n;
+    sizes.push(d * pow);
+    rest -= d * pow;
+  }
+  return { sizes, rest };
+}
+
 export function hashExtData(ext: ExtData): bigint {
   return BigInt(keccak256(encodeAbiParameters(EXT_DATA_ABI, [ext]))) % FIELD_SIZE;
 }

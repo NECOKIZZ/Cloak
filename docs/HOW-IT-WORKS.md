@@ -27,8 +27,17 @@ On a normal exchange, every trade is stamped with your wallet address forever. A
 4. **A go-between submits it.** The proof goes to a **relayer**, which sends the trade to the chain and pays the gas. On-chain, the trade comes from the relayer and the tokens land back in the vault as new private notes for you. **Your wallet never appears.** The relayer can't change your trade (the proof locks every detail), and it can't take your money.
 5. **Withdraw whenever you want.** You can send private HYPE or tokens out to any address. A brand-new address keeps the most privacy.
 
-**What stays private:** who traded, what each person holds, and which trades belong to the same person.
-**What's still public:** each trade's size and direction (the pool's price moves for everyone), and the one-off deposits and withdrawals.
+6. **Send privately.** You can pay anyone with a `cloak:` address straight from your private balance. Nobody can see who paid whom, or how much.
+7. **Batch mode: hide how much you trade.** A normal private trade still shows its size on the public pool. In batch mode:
+   - Your amount is chopped into **standard sizes** that everybody uses (like coins: 0.2 + 0.1 + 0.05 + 0.02).
+   - Those orders wait in a **round** of about 30 seconds alongside everyone else's.
+   - When the round ends, buyers and sellers are **matched against each other first**, at the pool's fair middle price with no fee. Only the leftover difference trades on the pool, as one combined trade.
+   - Everyone on the same side of the round gets **the same price**, and the tokens come back into each person's private balance.
+   - From outside you only see "this round had 7 small orders and the net was +0.4 HYPE." Nobody can tell which orders were yours or how much you moved in total.
+
+**What stays private:** who traded, what each person holds, which trades belong to the same person, and the amount of a private send. With batch mode, also how much you traded.
+**What's still public:** instant trades' size and direction (the pool's price moves for everyone), each batch round's order counts and net total, and the one-off deposits and withdrawals.
+**Batch tip:** batches hide you best when other people trade in the same round.
 
 **Tip:** don't deposit 1 HYPE and immediately buy with exactly 1 HYPE. Waiting and using different amounts makes you much harder to spot.
 
@@ -45,5 +54,6 @@ On a normal exchange, every trade is stamped with your wallet address forever. A
 | `CloakPair` | the trading pool every launch opens with |
 | `ShieldedPool` | the private vault, one per token (ported from our Veil project) |
 | `PrivateRouter` | does private buys and sells between vaults, through the launch's pool |
+| `PrivateBatcher` | batch rounds: standard-size orders, buys and sells crossed at the mid-price, only the net hits the pool |
 | `@cloak/sdk` | what the page (or any launchpad) uses for all of the above |
 | keeper / relayer | opens sealed bids, settles launches, and submits private trades |

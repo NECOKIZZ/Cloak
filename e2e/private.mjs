@@ -4,8 +4,8 @@
 //   Elysium: RPC_URL=… DEPLOYER_PK=… FACTORY=0x… LAUNCH_INDEX=n [ROUTER=0x…] node e2e/private.mjs
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { generatePrivateKey } from "viem/accounts";
-import { anvilLocal, elysiumTestnet, CloakPrivate, createProver, walletSubmitter, relayerSubmitter, privateRouterAbi, cloakFactoryAbi, cloakTokenAbi } from "@cloak/sdk";
-import { Cloak, clients, deployFactory, deployPrivacy, fmt, parseEther, waitChainTime, waitDrand } from "./lib.mjs";
+import { anvilLocal, elysiumTestnet, CloakPrivate, createProver, walletSubmitter, relayerSubmitter, privateRouterAbi, privateBatcherAbi, cloakFactoryAbi, cloakTokenAbi } from "@cloak/sdk";
+import { Cloak, clients, deployBatcher, deployFactory, deployPrivacy, fmt, parseEther, sleep, waitChainTime, waitDrand } from "./lib.mjs";
 
 const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8545";
 const local = RPC.includes("127.0.0.1") || RPC.includes("localhost");
@@ -61,6 +61,15 @@ if (!router) {
   txs.deployRouter = p.txHash;
   console.log(`router ${router} · verifier ${p.verifier}`);
 }
+let batcher = process.env.BATCHER;
+let batcherBlock = BigInt(process.env.BATCHER_BLOCK ?? 0);
+if (!batcher) {
+  const b = await deployBatcher(d.publicClient, d.walletClient, router, { roundSecs: local ? 8 : 30, maxSlippageBps: local ? 500 : 2500, refundAfter: 600 });
+  batcher = b.batcher;
+  batcherBlock = b.block;
+  txs.deployBatcher = b.txHash;
+  console.log(`batcher ${batcher}`);
+}
 const [, token] = await d.publicClient.readContract({ address: factory, abi: cloakFactoryAbi, functionName: "launches", args: [launchIndex] });
 const SYM = await d.publicClient.readContract({ address: token, abi: cloakTokenAbi, functionName: "symbol" });
 const existing = await d.publicClient.readContract({ address: router, abi: privateRouterAbi, functionName: "poolOf", args: [token] });
@@ -77,9 +86,9 @@ await d.publicClient.waitForTransactionReceipt({ hash: await d.walletClient.send
 const relayer = clients(chain, RPC, RELAYER_PK);
 const root = new URL("..", import.meta.url).pathname;
 const prover = createProver(readFileSync(`${root}apps/web/public/circuits/transaction2x2.wasm`), readFileSync(`${root}apps/web/public/circuits/transaction2x2_final.zkey`));
-const submit = process.env.RELAYER_URL ? relayerSubmitter(process.env.RELAYER_URL) : walletSubmitter(relayer.publicClient, relayer.walletClient, router);
+const submit = process.env.RELAYER_URL ? relayerSubmitter(process.env.RELAYER_URL) : walletSubmitter(relayer.publicClient, relayer.walletClient, router, batcher);
 const keys = await CloakPrivate.keysFromWallet(trader.walletClient);
-const priv = new CloakPrivate(d.publicClient, router, keys, async () => prover, submit, routerBlock);
+const priv = new CloakPrivate(d.publicClient, router, keys, async () => prover, submit, routerBlock, batcher);
 const markets = await priv.loadMarkets();
 const hypePool = markets[0].pool;
 const tokenPool = priv.market(token).pool;
@@ -114,14 +123,67 @@ txs.unshield = await priv.unshieldHype(fresh, out, (m) => console.log(`    · ${
 ok((await d.publicClient.getBalance({ address: fresh })) === out, `unshielded ${fmt(out, 4)} HYPE to a brand-new address`);
 
 // a second trader can't see the first one's notes
-const other = new CloakPrivate(d.publicClient, router, await CloakPrivate.keysFromWallet(clients(chain, RPC, generatePrivateKey()).walletClient), async () => prover, submit, routerBlock);
+const other = new CloakPrivate(d.publicClient, router, await CloakPrivate.keysFromWallet(clients(chain, RPC, generatePrivateKey()).walletClient), async () => prover, submit, routerBlock, batcher);
 await other.loadMarkets();
 ok((await other.balance(hypePool)) === 0n && (await other.balance(tokenPool)) === 0n, "another account sees none of these notes");
+
+// ── private send: amount, sender and recipient hidden ──
+const sendAmt = parseEther("0.3") / scale;
+const hypeBeforeSend = await priv.balance(hypePool);
+txs.privateSend = await priv.send(markets[0].token, await other.address(), sendAmt, (m) => console.log(`    · ${m}`));
+ok((await other.balance(hypePool)) === sendAmt, `private send: the other account received ${fmt(sendAmt, 4)} HYPE`);
+ok((await priv.balance(hypePool)) === hypeBeforeSend - sendAmt, "sender's private balance went down by the same hidden amount");
+const sendTx = await d.publicClient.getTransaction({ hash: txs.privateSend });
+const sendRc = await d.publicClient.getTransactionReceipt({ hash: txs.privateSend });
+const sendAmtHex = sendAmt.toString(16);
+ok(!sendTx.input.toLowerCase().includes(sendAmtHex.padStart(32, "0")) && !sendRc.logs.some((l) => l.data.toLowerCase().includes(sendAmtHex.padStart(32, "0"))), "the sent amount appears nowhere in the transaction");
+
+// ── batch auction: standard-size orders, crossed at mid, only the net hits the pool ──
+const tokBefore = await priv.balance(tokenPool);
+const hypeOtherBefore = await other.balance(hypePool);
+// other buys a few tokens instantly so it has something to sell in the batch
+await other.buy(token, parseEther("0.1") / scale);
+const otherTok = await other.balance(tokenPool);
+const buyAmt = parseEther("0.37") / scale; // → 0.2 + 0.1 + 0.05 + 0.02
+const placedBuy = await priv.batch(token, "buy", buyAmt, { onStatus: (m) => console.log(`    · ${m}`) });
+const placedSell = await other.batch(token, "sell", otherTok, { maxOrders: 3, onStatus: (m) => console.log(`    · ${m}`) });
+const allOrders = [...placedBuy.orders, ...placedSell.orders];
+txs.batchOrder = allOrders[0].txHash;
+ok(placedBuy.orders.length === 4 && placedBuy.rest === 0n, `0.37 HYPE (scaled) split into 4 standard-size buy orders`);
+const bc = { address: batcher, abi: privateBatcherAbi };
+for (const o of allOrders) {
+  const tx = await d.publicClient.getTransaction({ hash: o.txHash });
+  if (tx.from.toLowerCase() !== relayer.account.address.toLowerCase()) throw new Error("order not relayed");
+}
+ok(true, `${allOrders.length} orders placed, every one sent by the relayer`);
+// act as the keeper: settle each round that has orders, then pay out
+const rounds = [...new Set(allOrders.map((o) => o.round))];
+const roundSecs = await d.publicClient.readContract({ ...bc, functionName: "roundSecs" });
+for (const r of rounds) {
+  await waitChainTime(d.publicClient, Number((r + 1n) * roundSecs), { mine });
+  if (mine) await mine();
+  const h = await relayer.walletClient.writeContract({ ...bc, functionName: "settle", args: [token, r] });
+  await d.publicClient.waitForTransactionReceipt({ hash: h });
+  txs.batchSettle = h;
+}
+const ch = await relayer.walletClient.writeContract({ ...bc, functionName: "claim", args: [allOrders.map((o) => o.id)] });
+await d.publicClient.waitForTransactionReceipt({ hash: ch });
+txs.batchClaim = ch;
+const gained = (await priv.balance(tokenPool)) - tokBefore;
+ok(gained > 0n, `batched buy filled: +${fmt(gained, 0)} ${SYM} privately`);
+const otherHype = await other.balance(hypePool);
+ok(otherHype > hypeOtherBefore - parseEther("0.1") / scale, `batched sell filled: other account has ${fmt(otherHype, 5)} private HYPE`);
+// uniform price inside a round: every buy order in the same round got the same rate
+const fills = await d.publicClient.getContractEvents({ ...bc, eventName: "OrderFilled", fromBlock: batcherBlock, strict: true });
+const byId = new Map(fills.map((f) => [f.args.id, f.args.amountOut]));
+const sameRoundBuys = placedBuy.orders.filter((o) => o.round === placedBuy.orders[0].round);
+const rates = sameRoundBuys.map((o) => (byId.get(o.id) * 10n ** 18n) / o.size);
+ok(rates.every((x) => (x > rates[0] ? x - rates[0] : rates[0] - x) * 10n ** 9n <= rates[0]), `uniform price: ${sameRoundBuys.length} buy orders in one round all filled at the same rate`);
 
 console.log(`\n${checks} checks passed`);
 if (!local) {
   mkdirSync(new URL("../deployments", import.meta.url), { recursive: true });
-  const outj = { chainId: chain.id, factory, router, routerBlock: routerBlock.toString(), token, hypePool, tokenPool, txs: Object.fromEntries(Object.entries(txs).map(([k, v]) => [k, explorer(v)])) };
+  const outj = { chainId: chain.id, factory, router, routerBlock: routerBlock.toString(), batcher, batcherBlock: batcherBlock.toString(), token, hypePool, tokenPool, txs: Object.fromEntries(Object.entries(txs).map(([k, v]) => [k, explorer(v)])) };
   writeFileSync(new URL("../deployments/elysium-testnet-private.json", import.meta.url), JSON.stringify(outj, null, 2));
   console.log(JSON.stringify(outj, null, 2));
 }

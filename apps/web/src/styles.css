@@ -196,3 +196,4 @@ a:hover { color: var(--accent-hi); }
 
 .card.private { border-color: rgba(95, 227, 196, 0.22); background: linear-gradient(180deg, rgba(95, 227, 196, 0.05), transparent 40%), var(--panel); }
 .link { color: var(--accent); cursor: pointer; }
+.warn-t { color: var(--warm); }

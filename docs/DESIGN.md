@@ -143,7 +143,8 @@ The launch auction is the shipped core. These items extend the same privacy stor
 | Track | What it hides | How | Status |
 |---|---|---|---|
 | **Private buys and sells (shielded balances)** | *Who* is trading | Veil's shielded pool (Groth16 2-in/2-out, Poseidon, relayer) ported to Elysium, plus a PrivateRouter that swaps between the WHYPE pool and each launch's token pool. Trade size and direction remain visible on the AMM. | **Shipped**: live on testnet |
-| **Sealed batch trading** | *What* is traded, until the batch clears | Run the Cloak mechanism continuously: every 30–60 s, collect sealed buy and sell orders, clear them at one price against the pool, then open the next batch. No sandwiching, and sizes stay hidden until clearing. | Roadmap: reuses `CloakAuction` tick-walk and tlock reveal |
+| **Batch trading** | *How much* each trader moved | PrivateBatcher: standard-size orders (1/2/5 × 10ⁿ) from shielded balances collect into rounds; buys and sells cross at the mid-price and only the net hits the pool; uniform price per side; outputs to one-time keys. | **Shipped**: live on testnet. Next: timelock-seal the orders too, so side and size stay hidden until the round clears |
+| **Private sends** | Amount, sender, recipient | Transfers inside a vault to a `cloak:` address. | **Shipped** |
 | **Private perps vault** | *Whose* position | A shared HyperCore account funded from the shielded pool. Orders are batched through `ElysiumCoreWriter` intents placed by a keeper acting as a trade-only HyperCore agent. You trust the vault operator, and the aggregate position is public. | Roadmap: the market-data precompile lands ~4 weeks after mainnet |
 | **kHYPE bids** | — | Bid in liquid-staked HYPE so locked capital keeps earning yield. | Roadmap |
 
@@ -156,4 +157,5 @@ The launch auction is the shipped core. These items extend the same privacy stor
 - [x] e2e on anvil: 13 checks, real drand beacon
 - [x] Elysium testnet deploy and real run (13/13 checks; links in README)
 - [x] Private trading: ShieldedPool + PrivateRouter + CloakPrivate SDK + relay, live on testnet (10/10 with real proofs)
+- [x] Private sends + PrivateBatcher (batch trading that hides size), live on testnet (18/18 with real proofs)
 - [ ] Demo video

@@ -37,7 +37,7 @@ export async function waitDrand(round) {
 
 export { Cloak, parseEther };
 
-import { privateRouterAbi } from "@cloak/sdk";
+import { privateRouterAbi, privateBatcherAbi } from "@cloak/sdk";
 
 /** Deploy Poseidon(2), Poseidon(3), the Groth16 verifier and the PrivateRouter (which deploys WHYPE + its pool). */
 export async function deployPrivacy(publicClient, walletClient, factory) {
@@ -51,4 +51,10 @@ export async function deployPrivacy(publicClient, walletClient, factory) {
   const hash = await walletClient.deployContract({ abi: privateRouterAbi, bytecode: bytecode.PrivateRouter, args: [verifier, p2, p3, factory] });
   const r = await publicClient.waitForTransactionReceipt({ hash });
   return { router: r.contractAddress, verifier, poseidon2: p2, poseidon3: p3, block: r.blockNumber, txHash: hash };
+}
+
+export async function deployBatcher(publicClient, walletClient, router, { roundSecs, maxSlippageBps, refundAfter }) {
+  const hash = await walletClient.deployContract({ abi: privateBatcherAbi, bytecode: bytecode.PrivateBatcher, args: [router, BigInt(roundSecs), maxSlippageBps, BigInt(refundAfter)] });
+  const r = await publicClient.waitForTransactionReceipt({ hash });
+  return { batcher: r.contractAddress, block: r.blockNumber, txHash: hash };
 }

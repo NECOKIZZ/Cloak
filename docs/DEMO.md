@@ -17,4 +17,6 @@
 | 1:52 | Private trading panel → Unlock private account (sign) → Shield 0.5 HYPE | "Launch is half the story. On a normal exchange, every trade is stamped with your wallet. With Cloak I sign once, and move HYPE into a private vault." |
 | 2:05 | Buy tab → Buy privately → status: "Generating zero-knowledge proof on this device…" | "My browser proves I own some private HYPE, without saying which. A relayer submits it." |
 | 2:15 | Explorer: the private-buy tx `from` = relayer, tokens into the shielded pool | "On-chain, the buyer is the relayer. My wallet isn't anywhere in this transaction. My SHADE balance is private." |
-| 2:25 | SDK snippet + "Ascend" | "Cloak is one SDK any Elysium launchpad can plug in: sealed-bid launches, locked liquidity, private trading." |
+| 2:22 | Buy tab → Batch · hides size → 0.37 → "0.2 + 0.1 + 0.05 + 0.02" → Place 4 sealed buy orders; round countdown → balance updates | "Even a private trade shows its size on the pool. Batch mode splits it into the same standard sizes everyone uses. At the end of the round, buys and sells cross at the fair price, and only the net touches the pool." |
+| 2:40 | Send tab → paste a cloak: address → Send privately | "And I can pay anyone privately: no sender, no recipient, no amount on-chain." |
+| 2:50 | SDK snippet + "Ascend" | "Cloak is one SDK any Elysium launchpad can plug in: sealed-bid launches, locked liquidity, private trading." |

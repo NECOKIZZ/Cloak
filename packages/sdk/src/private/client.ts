@@ -1,5 +1,5 @@
-import { encodeAbiParameters, type Address, type Hex, type PublicClient } from "viem";
-import { cloakPairAbi, privateRouterAbi, shieldedPoolAbi } from "../abis.js";
+import { encodeAbiParameters, parseEventLogs, type Address, type Hex, type PublicClient } from "viem";
+import { cloakPairAbi, privateBatcherAbi, privateRouterAbi, shieldedPoolAbi } from "../abis.js";
 import type { Wallet } from "../cloak.js";
 import {
   ACCOUNT_MESSAGE,
@@ -8,18 +8,20 @@ import {
   noteCommitment,
   encryptFullMemo,
   encryptRouterMemo,
+  formatCloakAddress,
   nullifierOf,
+  parseCloakAddress,
   randomField,
   randomKeyIndex,
   readMemo,
 } from "./crypto.js";
 import { MerkleTree } from "./tree.js";
 import type { ProofArgs, Prover } from "./prover.js";
-import { SWAP_DATA_ABI, buildTransaction, selectNotes, type ExtData, type OwnedNote } from "./tx.js";
+import { ORDER_DATA_ABI, SWAP_DATA_ABI, buildTransaction, selectNotes, splitStandard, type ExtData, type OwnedNote } from "./tx.js";
 
 /** A shielded call the relayer submits so the trader's wallet never appears on-chain. */
 export interface RelayCall {
-  kind: "privateSwap" | "unshieldHype" | "transact";
+  kind: "privateSwap" | "unshieldHype" | "transact" | "placeOrder";
   pool: Address;
   proof: ProofArgs;
   extData: ExtData;
@@ -53,8 +55,15 @@ export function relayerSubmitter(url: string): Submitter {
 }
 
 /** Submit from a wallet directly — works, but that wallet pays gas and appears as the sender. Use for tests/relayers. */
-export function walletSubmitter(publicClient: PublicClient, wallet: Wallet, router: Address): Submitter {
+export function walletSubmitter(publicClient: PublicClient, wallet: Wallet, router: Address, batcher?: Address): Submitter {
   return async (call) => {
+    if (call.kind === "placeOrder") {
+      if (!batcher) throw new Error("no batcher configured");
+      const h = await wallet.writeContract({ address: batcher, abi: privateBatcherAbi, functionName: "placeOrder", args: [call.pool, call.proof, call.extData] as never });
+      const rc = await publicClient.waitForTransactionReceipt({ hash: h });
+      if (rc.status !== "success") throw new Error(`order reverted: ${h}`);
+      return h;
+    }
     // viem cannot infer the nested tuple types through the union; the shapes match the ABI exactly.
     const args = [call.proof, call.extData] as never;
     const hash =
@@ -90,6 +99,7 @@ export class CloakPrivate {
     readonly prover: () => Promise<Prover>,
     readonly submit: Submitter,
     readonly fromBlock = 0n,
+    readonly batcher?: Address,
   ) {}
 
   /** Ask the wallet to sign the account message and derive the private keys from it. */
@@ -235,6 +245,63 @@ export class CloakPrivate {
     return hash;
   }
 
+  // ───────────── batch auctions (hide trade size) ─────────────
+
+  async roundInfo(): Promise<{ round: bigint; endsAt: number; roundSecs: number }> {
+    if (!this.batcher) throw new Error("no batcher configured");
+    const c = { address: this.batcher, abi: privateBatcherAbi } as const;
+    const [round, roundSecs] = await Promise.all([
+      this.publicClient.readContract({ ...c, functionName: "currentRound" }),
+      this.publicClient.readContract({ ...c, functionName: "roundSecs" }),
+    ]);
+    return { round, roundSecs: Number(roundSecs), endsAt: Number((round + 1n) * roundSecs) };
+  }
+
+  /**
+   * Batched private buy/sell. The amount is split into standard-size orders (1, 2, 5 × 10ⁿ), each placed from the
+   * private balance by the relayer into the current round. When the round ends, buys and sells cross at the pool's
+   * mid-price and only the net trades through the pool; outputs arrive as private notes. Observers can't tell how
+   * much any one trader moved. Any remainder that isn't a standard size stays in your private balance.
+   */
+  async batch(token: Address, side: "buy" | "sell", amount: bigint, opts: { maxOrders?: number; onStatus?: Status } = {}) {
+    if (!this.batcher) throw new Error("no batcher configured");
+    const onStatus = opts.onStatus ?? (() => {});
+    const m = this.market(token);
+    const poolIn = side === "buy" ? this.hypeMarket.pool : m.pool;
+    const { sizes, rest } = splitStandard(amount, opts.maxOrders ?? 6);
+    if (sizes.length === 0) throw new Error("amount too small for a standard-size order");
+    const placed: { id: bigint; size: bigint; round: bigint; txHash: Hex }[] = [];
+    for (let i = 0; i < sizes.length; i++) {
+      const size = sizes[i];
+      onStatus(`Order ${i + 1}/${sizes.length}: syncing…`);
+      const inputs = await this.inputsFor(poolIn, size, onStatus);
+      const keyIndex = randomKeyIndex();
+      const outKey = await this.keys.key(keyIndex);
+      const outBlinding = randomField();
+      const data = encodeAbiParameters(ORDER_DATA_ABI, [
+        { token, outPubKey: outKey.pubKey, outBlinding, outMemo: encryptRouterMemo(this.keys.encPub, outBlinding, keyIndex) },
+      ]);
+      const change = inputs.reduce((a, x) => a + x.amount, 0n) - size;
+      onStatus(`Order ${i + 1}/${sizes.length}: proving on this device…`);
+      const { proof, extData } = await buildTransaction({
+        tree: await this.tree(poolIn),
+        inputs,
+        outputs: change > 0n ? [await this.changeOutput(change)] : [],
+        extAmount: -size,
+        recipient: this.batcher,
+        data,
+        ...(await this.dummy()),
+        prover: await this.prover(),
+      });
+      onStatus(`Order ${i + 1}/${sizes.length}: relaying…`);
+      const txHash = await this.submit({ kind: "placeOrder", pool: poolIn, proof, extData });
+      const rc = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      const ev = parseEventLogs({ abi: privateBatcherAbi, logs: rc.logs, eventName: "OrderPlaced" })[0];
+      placed.push({ id: ev.args.id, size, round: ev.args.round, txHash });
+    }
+    return { orders: placed, rest };
+  }
+
   // ───────────── private trades ─────────────
 
   async quote(token: Address, side: "buy" | "sell", amountIn: bigint): Promise<bigint> {
@@ -314,6 +381,34 @@ export class CloakPrivate {
     });
     onStatus("Relaying withdrawal…");
     return this.submit({ kind: "unshieldHype", pool, proof, extData });
+  }
+
+  /** Your receiving address for private transfers. */
+  async address(): Promise<string> {
+    return formatCloakAddress((await this.keys.main()).pubKey, this.keys.encPub);
+  }
+
+  /**
+   * Private transfer inside a pool: sender, recipient and amount all stay hidden (Gloam/Veil-style payment).
+   * `token` = a launch token, or the WHYPE address / hypeMarket.token for HYPE.
+   */
+  async send(token: Address, to: string, amount: bigint, onStatus: Status = () => {}): Promise<Hex> {
+    const rcpt = parseCloakAddress(to);
+    const pool = this.market(token).pool;
+    const inputs = await this.inputsFor(pool, amount, onStatus);
+    const change = inputs.reduce((a, x) => a + x.amount, 0n) - amount;
+    const outputs = [{ amount, pubKey: rcpt.pubKey, memo: (b: bigint) => encryptFullMemo(rcpt.encPub, amount, b, MAIN_KEY) }];
+    if (change > 0n) outputs.push(await this.changeOutput(change));
+    onStatus("Generating zero-knowledge proof on this device…");
+    const { proof, extData } = await buildTransaction({
+      tree: await this.tree(pool),
+      inputs,
+      outputs,
+      ...(await this.dummy()),
+      prover: await this.prover(),
+    });
+    onStatus("Relaying private transfer…");
+    return this.submit({ kind: "transact", pool, proof, extData });
   }
 
   /** Private launch tokens → any address. */

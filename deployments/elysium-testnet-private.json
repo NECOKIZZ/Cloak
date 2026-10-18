@@ -3,15 +3,20 @@
   "factory": "0x1dc1ea9837ecbd31ec74f0d558e1db1c303a7e1c",
   "router": "0xfa2574cfc3afb8f7d3a0651fa2111ff4e3d2fc41",
   "routerBlock": "10973723",
+  "batcher": "0xf6582cc5a84fccf74e571e652fb7b603a2c25812",
+  "batcherBlock": "10980614",
   "token": "0x7e65c418e4E3CDdB1C3C8a9bD2dcE336AC7fd17D",
   "hypePool": "0xCDD04c1c2aEc00728995C151127D619990885715",
   "tokenPool": "0x5AB75B030adD2D9814F48D51585eBb9e42BBC721",
   "txs": {
-    "deployRouter": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x6de1de548240c9413b0253532f5c27e686cdc1575640a3976edeb71feb94ab00",
-    "createPool": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x06b0359038d49c1e88afdda4220b55ecc390f2f1b5b0e8a539d206553abd133f",
-    "shield": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x51a61a2395266b5b0b3ed3d3091a3c43fd6e686cd08572b34b03107ae64775e5",
-    "privateBuy": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x1d2506221f6a04f32c401d1a2dc32ed579f207b0a5a2181ed3dee79f1dd3ec30",
-    "privateSell": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0xb0c10c24cb2599f35bba714e669810958eca7b860cdd3f239adc2c4211647ff3",
-    "unshield": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x2008d9d408582953a3cec2742d06292eb8022368985440fd59bb49e2fed804e5"
+    "deployBatcher": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x4df0e048fee78b05992ba181f51388ebec9b095325d67e1a783291e8759c9d26",
+    "shield": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x1e8534c335497be9db031e59288cf5da9c531a26ec5d0a14dc5eecbc977462f9",
+    "privateBuy": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x0bf3ec7ff5c6dd931a971de24fcd37e42dd19d1ca58b30a7ec12012930909ad8",
+    "privateSell": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x1c2f1083418e9cbd4b0f3bfc80632f2a54a0ff5a31e67b596f08e0c240b125fc",
+    "unshield": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0xa6c195b0f0a7058f1de0b18a8d9c43181fba13edf444bc0f7ead5b23652d3b3d",
+    "privateSend": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x72a604c3aa9b3ebef3d22d50cf9ee90938b2d70d0eceb0f23477d04706ffb731",
+    "batchOrder": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0xba2db51982d8a8ad190d813afd68f821bbd8dd48ee831021d4fb8729c99130b1",
+    "batchSettle": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x74f97a933d703dbfaf5fb56d833596e2c2658447216660028d2a0cd053d22392",
+    "batchClaim": "https://elysium.kinetiq.xyz/testnet-explorer/tx/0x6885e0e4c1b3dd69b3e99cf80dbc1b7da8fa825dcafcc5895294828374037009"
   }
 }

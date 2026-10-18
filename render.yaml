@@ -13,6 +13,10 @@ services:
         sync: false
       - key: ROUTER
         value: "0xfa2574cfc3afb8f7d3a0651fa2111ff4e3d2fc41"
+      - key: BATCHER
+        value: "0xf6582cc5a84fccf74e571e652fb7b603a2c25812"
+      - key: BATCHER_BLOCK
+        value: "10980614"
   - type: web
     name: cloak-web
     runtime: static

@@ -132,3 +132,17 @@ export function readMemo(encPriv: Uint8Array, memo: Hex): { amount: bigint; blin
   }
   return null;
 }
+
+// ── Cloak addresses: share one to receive private transfers ──
+// cloak:<pubKey 32 bytes><view key 32 bytes>
+export function formatCloakAddress(pubKey: bigint, encPub: Uint8Array): string {
+  return `cloak:${toHex(pubKey, { size: 32 }).slice(2)}${toHex(encPub).slice(2)}`;
+}
+
+export function parseCloakAddress(addr: string): { pubKey: bigint; encPub: Uint8Array } {
+  const a = addr.trim();
+  if (!/^cloak:[0-9a-fA-F]{128}$/.test(a)) throw new Error("not a cloak: address");
+  const pubKey = BigInt("0x" + a.slice(6, 70));
+  if (pubKey >= FIELD_SIZE) throw new Error("bad cloak: address");
+  return { pubKey, encPub: toBytes(`0x${a.slice(70)}`) };
+}

@@ -1,6 +1,6 @@
 # Cloak: private launches and private trading for Elysium
 
-> **Launches nobody can snipe, and trades nobody can trace.** Bids stay sealed until bidding closes, hidden even from the sequencer. Every winner pays **one clearing price**, and liquidity is seeded at that price and locked by the contract. After launch, anyone can hold, buy and sell the token **from a private balance**: trades are proven on your device and sent by a relayer, so your wallet never appears on them.
+> **Launches nobody can snipe, and trades nobody can trace.** Bids stay sealed until bidding closes, hidden even from the sequencer. Every winner pays **one clearing price**, and liquidity is seeded at that price and locked by the contract. After launch, anyone can hold, send, buy and sell the token **from a private balance**: trades are proven on your device and sent by a relayer, so your wallet never appears on them. **Batch mode** also hides how much you traded, and **private sends** hide the amount completely.
 
 Plain-English walkthrough: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
@@ -45,14 +45,17 @@ Veil (our Monad project) and [Gloam](https://gloam.trade) give stablecoins priva
 - **Your account** comes from one wallet signature (free, no transaction). Nothing is stored on a server.
 - **Relayer** (`services/keeper`, `POST /relay`): dry-runs your call, then submits it and pays gas. It is the on-chain sender of every private trade.
 - **Only real Cloak launches**: pools can only be created for a settled launch from the Cloak factory, and the router only swaps through that launch's pair.
+- **Private sends**: a transfer inside a vault to someone's `cloak:` address. The chain sees that a private transaction happened, but not who sent it, who received it or how much moved (Gloam/Veil-style payments).
+- **Batch mode (PrivateBatcher), which hides trade size**: your amount is split into **standard sizes** (1, 2 or 5 × 10ⁿ) that everyone uses, and the orders go into a round (30 s on testnet). When the round ends, buys and sells **cross each other at the pool's mid-price** (no fee, no price impact), and only the **net** difference trades through the pool, in one swap. Every buyer in the round gets the same price, and so does every seller. Outputs come back as private notes to one-time keys. Observers see "round N: 7 standard-size orders, net +0.4 HYPE hit the pool", not who placed which or how much any one trader moved. A price guard (settle-time mid within `maxSlippageBps` of the average at order time) stops a settler from sandwiching the batch. If a round can't settle, every order is refunded after a delay.
 
 | Live on Elysium testnet | |
 |---|---|
 | **PrivateRouter** | [`0xfa2574cfc3afb8f7d3a0651fa2111ff4e3d2fc41`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xfa2574cfc3afb8f7d3a0651fa2111ff4e3d2fc41) |
 | Shielded HYPE pool | [`0xCDD04c1c2aEc00728995C151127D619990885715`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xCDD04c1c2aEc00728995C151127D619990885715) |
 | Shielded $CLOAK pool | [`0x5AB75B030adD2D9814F48D51585eBb9e42BBC721`](https://elysium.kinetiq.xyz/testnet-explorer/address/0x5AB75B030adD2D9814F48D51585eBb9e42BBC721) |
+| **PrivateBatcher** (30 s rounds) | [`0xf6582cc5a84fccf74e571e652fb7b603a2c25812`](https://elysium.kinetiq.xyz/testnet-explorer/address/0xf6582cc5a84fccf74e571e652fb7b603a2c25812) |
 
-**A real private-trading run on testnet** (`e2e/private.mjs`, 10/10 checks, real proofs):
+**A real private-trading run on testnet** (`e2e/private.mjs`, 18/18 checks, real proofs):
 
 | Step | Transaction | What the chain sees |
 |---|---|---|
@@ -60,8 +63,12 @@ Veil (our Monad project) and [Gloam](https://gloam.trade) give stablecoins priva
 | Private buy | [0x1d25…ec30](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x1d2506221f6a04f32c401d1a2dc32ed579f207b0a5a2181ed3dee79f1dd3ec30) | **the relayer** bought tokens into the shielded pool |
 | Private sell | [0xb0c1…7ff3](https://elysium.kinetiq.xyz/testnet-explorer/tx/0xb0c10c24cb2599f35bba714e669810958eca7b860cdd3f239adc2c4211647ff3) | **the relayer** sold tokens from the shielded pool |
 | Withdraw to a brand-new address | [0x2008…04e5](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x2008d9d408582953a3cec2742d06292eb8022368985440fd59bb49e2fed804e5) | HYPE arrived at an address with no history |
+| Private send | [0x72a6…b731](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x72a604c3aa9b3ebef3d22d50cf9ee90938b2d70d0eceb0f23477d04706ffb731) | a private transaction happened; no amount, no sender, no recipient |
+| Batch order (one of 7) | [0xba2d…30b1](https://elysium.kinetiq.xyz/testnet-explorer/tx/0xba2db51982d8a8ad190d813afd68f821bbd8dd48ee831021d4fb8729c99130b1) | **the relayer** placed a standard-size order |
+| Batch settle | [0x74f9…2392](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x74f97a933d703dbfaf5fb56d833596e2c2658447216660028d2a0cd053d22392) | buys and sells crossed; only the net hit the pool |
+| Batch payout | [0x6885…7009](https://elysium.kinetiq.xyz/testnet-explorer/tx/0x6885e0e4c1b3dd69b3e99cf80dbc1b7da8fa825dcafcc5895294828374037009) | outputs deposited as private notes to one-time keys |
 
-The test checks that the trader's address appears **nowhere** in the trades' calldata or logs, and that a second account sees none of the first account's notes.
+The test checks that the trader's address appears **nowhere** in the trades' calldata or logs, that a second account sees none of the first account's notes, that a private send's amount appears nowhere in its transaction, and that every buy order in a round fills at the same rate.
 
 ## Why Elysium needs this
 
@@ -83,13 +90,14 @@ Cloak makes a launch **indifferent to who orders it**:
 
 ```
 contracts/         Foundry: CloakAuction, CloakFactory, CloakToken (fixed supply, no owner), CloakPair (HYPE/token AMM)
-contracts/src/shielded/  ShieldedPool, PrivateRouter, WHYPE, Groth16 verifier, Merkle tree (ported from Veil)
+contracts/src/shielded/  ShieldedPool, PrivateRouter, PrivateBatcher, WHYPE, Groth16 verifier, Merkle tree (from Veil)
 circuits/          transaction2x2.circom (2-in/2-out notes); built artifacts in apps/web/public/circuits
 packages/sdk/      @cloak/sdk: launches (createLaunch, bid, revealAll, settle, claimAll) + CloakPrivate
-                   (shieldHype, buy, sell, unshieldHype, balances, on-device prover, relayer client)
-services/keeper/   Auto-reveals after the drand round, settles, pushes claims, and relays private trades (POST /relay).
+                   (shieldHype, buy, sell, batch, send, unshield, balances, on-device prover, relayer client)
+services/keeper/   Auto-reveals after the drand round, settles launches, relays private trades (POST /relay),
+                   and settles + pays out private batch rounds.
 apps/web/          The launch page (Vite + React): sealed bid form, sealed→revealed demand curve, fair-launch card, trade, create
-e2e/               run.mjs (launch flow, 13 checks), private.mjs (private trading, 10 checks), seed.mjs, deploy.mjs
+e2e/               run.mjs (launch flow, 13 checks), private.mjs (private trading, 18 checks), seed.mjs, deploy.mjs
 docs/DESIGN.md     Research, design, roadmap
 ```
 
@@ -123,12 +131,12 @@ Prerequisites: Node ≥ 20, pnpm, Foundry.
 
 ```bash
 pnpm install && pnpm build
-pnpm test                                   # 20 Foundry tests (auction incl. solvency fuzz, private router) + SDK tests against live drand
+pnpm test                                   # 27 Foundry tests (auction incl. solvency fuzz, private router, batcher) + SDK tests
 
 # full flow on a local chain (uses the real drand beacon)
 anvil --balance 1000000 &
 pnpm e2e                                    # 13 checks: commit → auto-reveal → settle → pro rata → LP at clearing price → trade
-node e2e/private.mjs                        # 10 checks with real proofs: shield → private buy → private sell → withdraw
+node e2e/private.mjs                        # 18 checks with real proofs: shield → buy → sell → withdraw → send → batch round
 ```
 
 Local demo with the page:
@@ -155,7 +163,9 @@ cd apps/web && VITE_FACTORY=0x… pnpm build  # static site; render.yaml deploys
 ## Honest limits
 
 **Private trading**
-- **Hidden:** who traded, what each account holds, and which trades belong together. **Visible:** each trade's size and direction on the AMM (the pool is public), shield deposits (a wallet put X HYPE in) and withdrawals (an address got Y out).
+- **Hidden:** who traded, what each account holds, and which trades belong together. Private sends also hide the amount. In batch mode, an individual trader's size is hidden among standard-size orders.
+- **Visible:** instant trades show their size and direction on the AMM (the pool is public). A batch round shows its standard-size order counts and the net that hit the pool. Shield deposits and withdrawals show their amounts.
+- **Batch anonymity needs company.** If you're the only one in a round, your orders add up to your trade. More users per round means more privacy. Orders placed back-to-back by one client could be linked by timing (spreading orders across a round is a client-side upgrade).
 - **Timing can still link you.** Shielding 1 HYPE and immediately buying with exactly 1 HYPE is easy to connect, especially while few people use the pools. Wait, and trade different amounts.
 - **Relayer trust:** the relayer can refuse or delay your trade, and it sees your IP. It cannot steal, alter or redirect anything, because the proof binds every field. Anyone can run one.
 - **Trusted setup:** the Groth16 keys come from Veil's development ceremony. Production would need a public multi-party ceremony.
@@ -171,4 +181,4 @@ cd apps/web && VITE_FACTORY=0x… pnpm build  # static site; render.yaml deploys
 
 ## Roadmap
 
-See [docs/DESIGN.md](docs/DESIGN.md#8-beyond-launch-private-trading-on-elysium): **sealed batch trading** (private trades that also hide size until they clear, the same tlock mechanism every N seconds), private bids funded straight from a shielded balance, private sends and claim links (Veil), a private perps vault on HyperCore, and kHYPE bids.
+See [docs/DESIGN.md](docs/DESIGN.md#8-beyond-launch-private-trading-on-elysium): private launch bids funded straight from a shielded balance, timelock-sealed batch orders (hide side and size until the round clears), orders spread across the round, claim links (Veil), a private perps vault on HyperCore, and kHYPE bids.
