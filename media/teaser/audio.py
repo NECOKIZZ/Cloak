@@ -27,6 +27,9 @@ MUSIC = "m_mind_trap"     # "The mind trap - Part 1", 130 BPM
 MUSIC_DROP = 48.29        # where the drop's downbeat sits in the track
 BEHIND_GLASS = 420.0      # low-pass while the world is behind the glass (Hz)
 ORBS = [16.42, 17.75, 19.44]  # shot 4: each bid enters the monolith
+VO_GAIN = 1.6             # voice level in the mix
+DUCK_MUSIC = 0.65         # how far the music dips under the voice (0..1)
+DUCK_FX = 0.35            # how far the effects dip under the voice (0..1)
 
 VO = [
     (0.55, "Every launch is watched."),
@@ -416,7 +419,7 @@ def vo_track():
         out[i: i + len(a)] += a[: N - i]
     out = filt(out, "high", 55)  # the deep voice's fundamental sits ~80 Hz: keep it
     out = filt(out, "band", [90, 220]) * 0.35 + filt(out, "high", 2500) * 0.25 + out  # chest + presence
-    out = np.tanh(out * 1.8) / np.tanh(1.8)
+    out = np.tanh(out * 2.6) / np.tanh(2.6)  # levelling: quiet syllables come up
     return out
 
 
@@ -430,8 +433,15 @@ def mix(path):
     # duck the music under the voice
     env = maximum_filter1d(np.abs(vo), int(0.03 * SR))
     env = uniform_filter1d(env, int(0.25 * SR))
-    duck = 1 - 0.45 * np.clip(env / 0.12, 0, 1)
-    out = music * 0.62 * duck[:, None] + fx.buf * 0.8 + rev * 0.5 + np.stack([vo, vo], 1) * 1.0 + vo_rev[:, None] * 0.08
+    talking = np.clip(env / 0.12, 0, 1)
+    duck, duck_fx = 1 - DUCK_MUSIC * talking, 1 - DUCK_FX * talking
+    bed = music * 0.62 * duck[:, None] + (fx.buf * 0.8 + rev * 0.5) * duck_fx[:, None]
+    voice_st = np.stack([vo, vo], 1) * VO_GAIN + vo_rev[:, None] * 0.08 * VO_GAIN
+    out = bed + voice_st
+    on = talking > 0.5
+    vo_db = 10 * np.log10((voice_st[on] ** 2).mean())
+    bed_db = 10 * np.log10((bed[on] ** 2).mean())
+    print(f"voice sits {vo_db - bed_db:+.1f} dB over the music and effects while it speaks")
     out = filt(out, "high", 22)
     meter = pyloudnorm.Meter(SR)
     out = pyloudnorm.normalize.loudness(out, meter.integrated_loudness(out), -14.0)
