@@ -10,3 +10,4 @@ media/teaser/build/
 media/teaser/clips/
 media/teaser/sfx/*
 !media/teaser/sfx/credits.json
+__pycache__/
