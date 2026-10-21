@@ -118,5 +118,192 @@
     "foreign_landing_url": "https://commons.wikimedia.org/w/index.php?curid=3770387",
     "source": "wikimedia_audio",
     "attribution": "\"Thunder\" by Bidgee is licensed under CC BY 3.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/3.0/."
+  },
+  "shutter": {
+    "id": "1430",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/1430/1430-preview.mp3"
+  },
+  "glitch_fail": {
+    "id": "2951",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2951/2951-preview.mp3"
+  },
+  "glitch_place": {
+    "id": "2946",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2946/2946-preview.mp3"
+  },
+  "glitch_collect": {
+    "id": "1021",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/1021/1021-preview.mp3"
+  },
+  "glitch_logo": {
+    "id": "2950",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2950/2950-preview.mp3"
+  },
+  "static": {
+    "id": "1457",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/1457/1457-preview.mp3"
+  },
+  "impact_big": {
+    "id": "788",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/788/788-preview.mp3"
+  },
+  "trailer_hit": {
+    "id": "2908",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2908/2908-preview.mp3"
+  },
+  "glass_tap": {
+    "id": "2183",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2183/2183-preview.mp3"
+  },
+  "glass_hit": {
+    "id": "677",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/677/677-preview.mp3"
+  },
+  "riser": {
+    "id": "790",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/790/790-preview.mp3"
+  },
+  "riser_long": {
+    "id": "632",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/632/632-preview.mp3"
+  },
+  "rev_impact": {
+    "id": "784",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/784/784-preview.mp3"
+  },
+  "gong": {
+    "id": "619",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/619/619-preview.mp3"
+  },
+  "tubebells": {
+    "id": "2352",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2352/2352-preview.mp3"
+  },
+  "splitflap": {
+    "id": "3120",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/3120/3120-preview.mp3"
+  },
+  "ui_click": {
+    "id": "2577",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2577/2577-preview.mp3"
+  },
+  "gsm_buzz": {
+    "id": "2552",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2552/2552-preview.mp3"
+  },
+  "teleprinter": {
+    "id": "3122",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/3122/3122-preview.mp3"
+  },
+  "whoosh": {
+    "id": "1492",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/1492/1492-preview.mp3"
+  },
+  "whoosh_long": {
+    "id": "1486",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/1486/1486-preview.mp3"
+  },
+  "whoosh_stutter": {
+    "id": "787",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/787/787-preview.mp3"
+  },
+  "slam": {
+    "id": "2952",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2952/2952-preview.mp3"
+  },
+  "sub": {
+    "id": "2299",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2299/2299-preview.mp3"
+  },
+  "horn": {
+    "id": "2289",
+    "source": "mixkit",
+    "license": "Mixkit Sound Effects Free License",
+    "license_url": "https://mixkit.co/license/#sfxFree",
+    "url": "https://assets.mixkit.co/active_storage/sfx/2289/2289-preview.mp3"
+  },
+  "braam": {
+    "id": "55222fbc-dac2-4556-bea3-1d68c9064174",
+    "title": "647712 unfa braam",
+    "creator": "Unfa",
+    "creator_url": null,
+    "license": "cc0",
+    "license_version": "1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/deed.en/",
+    "foreign_landing_url": "https://commons.wikimedia.org/w/index.php?curid=129960732",
+    "source": "wikimedia_audio",
+    "attribution": "\"647712 unfa braam\" by Unfa is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/deed.en/."
   }
 }

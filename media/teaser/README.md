@@ -26,11 +26,18 @@ The music is 130 BPM, and its drop is pinned to the frame where the amber line s
 
 ## Sound
 
-All audio comes from [Openverse](https://openverse.org), limited to CC0 and CC BY licenses. Openverse's Freesound files are not reachable from the build environment. Wikimedia files rate-limit shared IPs, so any effect that hasn't downloaded yet plays a synthesized stand-in. The build prints which effects are real. Run `tools/fetch_sfx.sh`, then `build.py --audio-only`, to swap the real recordings in.
+- **Music** is from [Openverse](https://openverse.org) (Jamendo), chosen with `tools/analyze.py`.
+- **Sound effects** are mostly from [Mixkit](https://mixkit.co/free-sound-effects/), browsed and downloaded with `tools/mixkit.py`. A few come from Openverse (Wikimedia Commons). Freesound isn't reachable from the build environment.
+- **Missing files:** if an effect isn't in `sfx/`, a synthesized stand-in plays, and the build prints which ones.
+- **Voice** is Kokoro's deepest voice (`am_onyx`), pitched down about 2.4 semitones with rubberband (formants kept), with chest and presence EQ. Change `VOICE` / `PITCH` in `voice.py`.
 
-## Credits (required: CC BY)
+## Credits
 
-- Music: "The mind trap - Part 1" by zero-project, [Jamendo](https://www.jamendo.com/track/1710142), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Edited: re-cut, filtered and looped.
-- "Thunder" by Bidgee, [Wikimedia Commons](https://commons.wikimedia.org/w/index.php?curid=3770387), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Edited: low-passed and used as an impact.
+- Music: "The mind trap - Part 1" by zero-project, [Jamendo](https://www.jamendo.com/track/1710142), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Edited: re-cut, filtered and looped. **Credit required.**
+- "Thunder" by Bidgee, [Wikimedia Commons](https://commons.wikimedia.org/w/index.php?curid=3770387), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Edited: low-passed. **Credit required.**
+- "647712 unfa braam" by Unfa, [Wikimedia Commons](https://commons.wikimedia.org/w/index.php?curid=129960732), CC0.
+- Other sound effects from [Mixkit](https://mixkit.co), under the [Mixkit Sound Effects Free License](https://mixkit.co/license/#sfxFree) (no attribution required). Item IDs are in `sfx/credits.json`.
 
-Every other downloaded effect's credit is in `sfx/credits.json`. Add those to this list when they're in the mix.
+Suggested credit line for the video description:
+
+> Music: "The mind trap - Part 1" by zero-project (CC BY 3.0). Sound: "Thunder" by Bidgee (CC BY 3.0), Unfa (CC0), Mixkit.

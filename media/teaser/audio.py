@@ -244,6 +244,11 @@ def get(name, fallback):
     return (norm(x), True) if x is not None else (norm(stereo(fallback())), False)
 
 
+def peak_time(x):
+    env = uniform_filter1d(np.abs(x).max(1), int(0.02 * SR))
+    return np.argmax(env) / SR
+
+
 def build_effects():
     fx, wet = Bus(), Bus()
     used = {}
@@ -253,93 +258,110 @@ def build_effects():
         used[name] = real
         return shape(x) if (real and shape) else x
 
-    shutter = take("shutter", syn_shutter, lambda x: first_hit(x, 0.18))
-    glitches = [take(n, syn_glitch, lambda x: tail(x, 0.35)) for n in ("glitch_fail", "glitch_place", "glitch_collect")]
-    glitch_logo = take("glitch_logo", lambda: syn_glitch(0.6), lambda x: tail(x, 1.6))
-    static = take("static", lambda: rng.standard_normal(int(0.5 * SR)) * 0.5, lambda x: x[int(5 * SR): int(5.5 * SR)])
-    braam = take("braam", syn_braam, lambda x: tail(x, 5.0))
-    thunder = take("thunder", syn_boom, lambda x: filt(first_hit(x, 4.0), "low", 260))
-    tap = take("glass_tap", syn_tap, lambda x: first_hit(x, 0.6))
+    def hit(t, x, gain, pan=0.0, rev=0.0):
+        """A one-shot whose transient lands on t."""
+        fx.add(t, x, gain, pan)
+        if rev:
+            wet.add(t, x, gain * rev)
+
+    def build(t, x, gain, rev=0.0, not_before=None, stop_at_peak=False):
+        """A swell (riser, whoosh) whose loudest moment lands on t. Optionally starts no earlier than
+        `not_before` (with a short fade in) and/or stops dead at its peak."""
+        p = peak_time(x)
+        start = t - p
+        if stop_at_peak:
+            x = x[: int(p * SR)].copy()
+        if not_before is not None and start < not_before:
+            x = x[int((not_before - start) * SR):].copy()
+            k = min(len(x), int(0.08 * SR))
+            x[:k] *= np.linspace(0, 1, k)[:, None]
+            start = not_before
+        fx.add(start, x, gain)
+        if rev:
+            wet.add(start, x, gain * rev)
+
+    onset = lambda length: (lambda x: first_hit(x, length))
+    shutter = take("shutter", syn_shutter, onset(0.3))
+    glitches = [take(n, syn_glitch, onset(0.6)) for n in ("glitch_fail", "glitch_place", "glitch_collect")]
+    glitch_logo = take("glitch_logo", lambda: syn_glitch(0.6), onset(2.5))
+    static = take("static", lambda: rng.standard_normal(int(0.5 * SR)) * 0.5, lambda x: x[: int(1.2 * SR)])
+    braam = take("braam", syn_braam, lambda x: tail(first_hit(x, 6.0), 6.0))
+    horn = take("horn", syn_braam, onset(4.5))
+    thunder = take("thunder", syn_boom, lambda x: filt(first_hit(x, 5.0), "low", 300))
+    impact = take("impact_big", syn_boom)                       # has its own lead-in: placed by peak
+    trailer_hit = take("trailer_hit", syn_boom, onset(4.0))
+    tap = take("glass_tap", syn_tap, onset(0.5))
+    glass_hit = take("glass_hit", syn_tap, onset(4.5))
     riser = take("riser", syn_riser)
-    cym = take("cymbals", lambda: syn_noise_burst(2.0, 4000, 15000, 0.5), lambda x: first_hit(x, 1.5))
-    rev_cym = cym[::-1].copy()
-    gong = take("gong", lambda: syn_bell(196, 6.0), lambda x: first_hit(x, 8.0))
-    bells = take("tubebells", lambda: syn_bell(1318, 4.0), lambda x: first_hit(x, 4.0))
-    flap = take("splitflap", syn_flap, lambda x: first_hit(x, 0.6))
-    buzz = take("gsm_buzz", lambda: syn_buzz(4.0), lambda x: x[int(2 * SR): int(6 * SR)])
-    data = take("teleprinter", lambda: syn_data(5.0), lambda x: x[int(3 * SR): int(8 * SR)])
-    boom = stereo(norm(syn_boom(2.5, 90, 35)))  # sub layer under the big hits
+    riser_long = take("riser_long", lambda: syn_riser(3.0), lambda x: x[int(22.5 * SR): int(26.3 * SR)])
+    bell = take("gong", lambda: syn_bell(196, 6.0), onset(7.0))
+    sparkle = take("tubebells", lambda: syn_bell(1318, 4.0), onset(4.5))
+    slide = take("splitflap", syn_flap, onset(0.8))
+    click = take("ui_click", syn_flap, onset(0.2))
+    buzz = take("gsm_buzz", lambda: syn_buzz(4.0), lambda x: x[int(1 * SR): int(5 * SR)])
+    data = take("teleprinter", lambda: syn_data(4.0), onset(3.3))
+    whoosh = take("whoosh", lambda: syn_whoosh(1.0))
+    whoosh_long = take("whoosh_long", lambda: syn_whoosh(2.0), onset(5.0))
+    stutter = take("whoosh_stutter", lambda: syn_whoosh(2.0))
+    slam = take("slam", lambda: syn_glitch(0.4), onset(1.3))
+    sub = take("sub", lambda: syn_boom(1.2, 90, 40), onset(1.0))
 
     # 1 · WATCHED
-    fx.add(0.0, static * np.linspace(1, 0.3, len(static))[:, None], 0.35)
-    fx.add(0.0, glitches[0], 0.4)
+    hit(0.0, static, 0.5)
+    hit(0.0, glitches[0], 0.35)
     for t in (beat(3), beat(8), beat(9), beat(9.5)):
-        fx.add(t - 0.004, shutter, 0.55, pan=rng.uniform(-0.5, 0.5))
-        wet.add(t, shutter, 0.15)
+        hit(t, shutter, 0.7, pan=rng.uniform(-0.5, 0.5), rev=0.2)
     for i, t in enumerate((beat(5), beat(11.5))):
-        fx.add(t, glitches[(i + 1) % 3], 0.45)
+        hit(t, glitches[(i + 1) % 3], 0.5)
     for t in (beat(6), beat(13)):  # title slams
-        fx.add(t, boom, 0.5)
-        fx.add(t, glitches[2], 0.25)
-    # 2 · TRACED: the network listens
-    fx.add(beat(12), data * np.linspace(0.2, 1, len(data))[:, None], 0.16)
+        hit(t, slam, 0.55)
+        hit(t, sub, 0.7)
+    # 2 · TRACED: the network listens, interference builds
+    hit(beat(12), data, 0.3)
+    hit(beat(12) + 2.0, data, 0.25)
     b = buzz[: int((CUT_TO_BLACK - beat(16)) * SR)]
-    fx.add(beat(16), b * np.linspace(0, 1, len(b))[:, None] ** 2, 0.22)
+    fx.add(beat(16), b * np.linspace(0, 1, len(b))[:, None] ** 2, 0.35)
     for i, n in enumerate(range(16, 23)):
-        fx.add(beat(n), glitches[i % 3], 0.18 + 0.05 * i, pan=0.4 * (-1) ** i)
-    r = riser[-int((CUT_TO_BLACK - beat(17)) * SR):]
-    fx.add(CUT_TO_BLACK - len(r) / SR, r, 0.4)
-    # 3 · UNTIL NOW: glass slams down
-    w = stereo(syn_whoosh(GLASS_LANDS - 11.30, 7000, 300, True))
-    fx.add(11.30, w, 0.55)
-    rc = rev_cym[-int((GLASS_LANDS - 10.95) * SR):]
-    fx.add(GLASS_LANDS - len(rc) / SR, rc, 0.35)
-    fx.add(GLASS_LANDS, braam, 0.8)
-    fx.add(GLASS_LANDS, thunder, 0.8)
-    fx.add(GLASS_LANDS, boom, 0.9)
-    fx.add(GLASS_LANDS, tap, 0.6)
-    wet.add(GLASS_LANDS, tap, 0.6)
-    wet.add(GLASS_LANDS, braam, 0.3)
-    fx.add(GLASS_LANDS + 0.02, glitch_logo, 0.25)  # SIGNAL LOST
+        hit(beat(n), glitches[i % 3], 0.2 + 0.05 * i, pan=0.4 * (-1) ** i)
+    build(CUT_TO_BLACK, riser_long, 0.45, stop_at_peak=True)
+    # 3 · UNTIL NOW: the glass comes down and lands
+    # dead air after the feed dies; the fall starts with the picture at 11.3
+    build(GLASS_LANDS, stutter, 0.6, not_before=11.25)
+    build(GLASS_LANDS, impact, 0.9, rev=0.3, not_before=11.25)
+    hit(GLASS_LANDS, braam, 0.85, rev=0.25)
+    hit(GLASS_LANDS, glass_hit, 0.55, rev=0.5)
+    hit(GLASS_LANDS + 0.02, glitch_logo, 0.3)  # SIGNAL LOST
     # 4 · SEALED: each bid goes in with a glass tap, swallowed
     for i, t in enumerate(ORBS):
         x = repitch(tap, [-3, 0, -5][i])
-        fx.add(t, filt(x, "low", 5000), 0.45, pan=[-0.3, 0.3, 0][i])
-        wet.add(t, x, 0.5)
-        fx.add(t, boom, 0.25)
+        hit(t, filt(x, "low", 6000), 0.55, pan=[-0.3, 0.3, 0][i], rev=0.9)
+        hit(t, sub, 0.35)
     # 5 · ONE PRICE
-    rc = rev_cym[-int((BEAM_STRIKE - beat(44)) * SR):]
-    fx.add(BEAM_STRIKE - len(rc) / SR, rc, 0.4)
-    g = repitch(gong, -5)
-    fx.add(BEAM_STRIKE, g, 0.55)
-    wet.add(BEAM_STRIKE, g, 0.35)
-    fx.add(BEAM_STRIKE, boom, 0.6)
-    r = riser[-int((DROP - BEAM_STRIKE) * SR):]
-    fx.add(DROP - len(r) / SR, r, 0.45)
-    fx.add(DROP, thunder, 0.7)
-    fx.add(DROP, boom, 0.8)
-    fx.add(DROP, bells, 0.3)
-    wet.add(DROP, bells, 0.4)
+    build(BEAM_STRIKE, whoosh, 0.5)
+    hit(BEAM_STRIKE, bell, 0.6, rev=0.4)
+    hit(BEAM_STRIKE, sub, 0.6)
+    build(DROP, riser, 0.65)
+    hit(DROP, trailer_hit, 0.8, rev=0.2)
+    hit(DROP, thunder, 0.45)
+    hit(DROP, sparkle, 0.4, rev=0.4)
     # 6 · NO TRACE
     for i, t in enumerate((26.25, 27.64, 28.67, 29.95)):
-        fx.add(t, glitches[i % 3], 0.22)
-    fx.add(28.42, glitch_logo, 0.25)
-    fx.add(28.42, shutter, 0.4)
+        hit(t, glitches[i % 3], 0.25)
+        hit(t, click, 0.25)
+    hit(28.42, glitch_logo, 0.3)
+    hit(28.42, shutter, 0.5)
     # 7 · END
-    fx.add(END_IN - 0.35, stereo(syn_whoosh(0.9, 400, 8000, True)), 0.4)
-    fx.add(MARK_IN, tap, 0.6)
-    wet.add(MARK_IN, tap, 0.6)
-    fx.add(MARK_IN, glitch_logo, 0.3)
-    fx.add(MARK_IN, bells, 0.25)
-    wet.add(MARK_IN, bells, 0.4)
+    hit(END_IN - 0.1, whoosh_long, 0.5, rev=0.3)
+    hit(MARK_IN, tap, 0.6, rev=0.7)
+    hit(MARK_IN, glitch_logo, 0.3)
+    hit(MARK_IN, sparkle, 0.35, rev=0.4)
     for f in FLIPS:
-        fx.add(f, flap, 0.6)
-        wet.add(f, flap, 0.15)
-    fx.add(FLIPS[-1] + 0.16, braam, 0.55)
-    fx.add(FLIPS[-1] + 0.16, boom, 0.6)
-    fx.add(MUSIC_OUT, thunder, 0.7)
-    fx.add(MUSIC_OUT, boom, 0.6)
-    wet.add(MUSIC_OUT, bells, 0.35)
+        hit(f, slide, 0.55, rev=0.15)
+        hit(f + 0.16, click, 0.4)
+    hit(FLIPS[-1] + 0.16, horn, 0.6, rev=0.2)
+    hit(FLIPS[-1] + 0.16, sub, 0.7)
+    hit(MUSIC_OUT, impact[int(peak_time(impact) * SR) - int(0.01 * SR):], 0.8, rev=0.3)
+    hit(MUSIC_OUT, braam, 0.5, rev=0.3)
     return fx, wet, used
 
 
@@ -392,8 +414,8 @@ def vo_track():
         a = a / (np.abs(a).max() + 1e-6) * 0.8
         i = int(start * SR)
         out[i: i + len(a)] += a[: N - i]
-    out = filt(out, "high", 100)
-    out = filt(out, "high", 2500) * 0.25 + out  # a little presence
+    out = filt(out, "high", 55)  # the deep voice's fundamental sits ~80 Hz: keep it
+    out = filt(out, "band", [90, 220]) * 0.35 + filt(out, "high", 2500) * 0.25 + out  # chest + presence
     out = np.tanh(out * 1.8) / np.tanh(1.8)
     return out
 
