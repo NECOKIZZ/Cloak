@@ -305,5 +305,17 @@
     "foreign_landing_url": "https://commons.wikimedia.org/w/index.php?curid=129960732",
     "source": "wikimedia_audio",
     "attribution": "\"647712 unfa braam\" by Unfa is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/deed.en/."
+  },
+  "shutter_canon": {
+    "id": "be9c4349-1c66-48ed-894d-2d72c51de46d",
+    "title": "261007 polecatz camera-canon-5d-iii",
+    "creator": "Polecatz",
+    "creator_url": null,
+    "license": "cc0",
+    "license_version": "1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/deed.en/",
+    "foreign_landing_url": "https://commons.wikimedia.org/w/index.php?curid=116752422",
+    "source": "wikimedia_audio",
+    "attribution": "\"261007 polecatz camera-canon-5d-iii\" by Polecatz is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/deed.en/."
   }
 }
