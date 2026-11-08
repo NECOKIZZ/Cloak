@@ -38,6 +38,11 @@ Defaults when not given: 1 spot per bid, category PFP, winners get 1 day to swap
   contracts. No redeploy needed for new partners.
 - `CloakSpots.rows(winners)` / `CloakSpots.csv(winners)`: each winning bid's first spot defaults to the bidding wallet;
   a winner can replace it on chain with `setWallets`. No wallet appears twice.
+- **Bid fields** (partner wants usernames etc.): the creator adds them when listing ("+ Add a field" in the create
+  form, or `fields: [{ "label": "X username", "required": true }]` in the partner JSON). Bidders fill them in on the
+  bid form; the answers are **sealed inside the bid** (the `x` key of the tlock payload, ignored by older readers),
+  unreadable until close. After close, `CloakSpots.winners()` reads them back and the CSV is
+  `id, <field columns…>, wallet, bid, bidder, status`. No contract changes for new partner requirements.
 - **Bidding from a fresh wallet** (say, funded from a private balance): the bid form has an optional "Wallet for the
   GTD/WL list". It's kept only in that browser (`cloak.listWallet.<drop>.<bidId>` in localStorage), never on chain,
   so losing bids reveal no link between wallets. When the bid wins, the sale page fills it in and the winner confirms

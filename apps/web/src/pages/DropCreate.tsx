@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getAddress, isAddress, parseEther, type Address } from "viem";
-import { DROP_LIST_MAX, DROP_MAX_REQUIREMENTS, DROP_MAX_SUPPLY, type GtdEntry, type SpotKind } from "@cloakely/sdk";
+import { DROP_LIST_MAX, DROP_MAX_FIELDS, DROP_MAX_REQUIREMENTS, DROP_MAX_SUPPLY, type GtdEntry, type SpotKind } from "@cloakely/sdk";
 import { dropsClient, imageSrc, itemPreview, pct, spotsClient, type ItemMeta } from "../drops";
 import { friendly, Hint } from "../errors";
 import { hype } from "../format";
@@ -65,6 +65,7 @@ export function DropCreate() {
   const [walletDays, setWalletDays] = useState(3);
   const [spotType, setSpotType] = useState<SpotKind>("WL");
   const [reqs, setReqs] = useState<{ text: string; url: string }[]>([]);
+  const [fields, setFields] = useState<{ label: string; required: boolean }[]>([]);
   const [closeAt, setCloseAt] = useState(() => localInput(Math.floor(Date.now() / 1000) + 86400));
   const [f, setF] = useState({ name: "", symbol: "", supply: "1000", price: "0.5", maxPerBid: "2", royalty: "5", baseURI: "", description: "", gtdOn: false, gtdList: "", gtdPrice: "0.4", gtdSecs: 86400, wlOn: false, wlList: "", boost: 20, biddingSecs: 86400 });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -125,13 +126,15 @@ export function DropCreate() {
     const badReq = reqs.find((q) => q.url.trim() && !/^https:\/\/[^\s"<>]+$/.test(q.url.trim()));
     if (!problem && badReq) problem = `The link for "${badReq.text.trim().slice(0, 40) || "a requirement"}" starts with https://.`;
     if (!problem && reqs.some((q) => q.url.trim() && !q.text.trim())) problem = "Say what each requirement link is for, like Follow @partner.";
+    const labels = fields.map((x) => x.label.trim().toLowerCase()).filter(Boolean);
+    if (!problem && new Set(labels).size !== labels.length) problem = "Give each bidder field a different name.";
     // bidding that closes at a set time: its length counts from when bids open (about 90 s after creating)
     const closeTs = Math.floor(new Date(closeAt).getTime() / 1000);
     const biddingSecs = f.biddingSecs === AT_TIME ? closeTs - Math.floor(Date.now() / 1000) - START_DELAY - (f.gtdOn && !spots ? f.gtdSecs : 0) : f.biddingSecs;
     if (!problem && f.biddingSecs === AT_TIME && !(biddingSecs >= 600)) problem = "Close bidding at least 10 minutes after the drop opens.";
     else if (!problem && f.biddingSecs === AT_TIME && biddingSecs > 30 * 86400) problem = "Close bidding within 30 days.";
     return { supply, price, gtd: gtd.gtd, wl: wl.wl, gtdSpots, gtdPrice: gtdPrice ?? 0n, biddingSecs, problem };
-  }, [f, spots, partner, links, banner, reqs, closeAt]);
+  }, [f, spots, partner, links, banner, reqs, closeAt, fields]);
 
   async function pick(file?: File) {
     if (!file) return;
@@ -178,6 +181,7 @@ export function DropCreate() {
         wl: f.wlOn ? { list: plan.wl, boostBps: f.boost * 100 } : undefined,
         biddingSecs: plan.biddingSecs,
         requirements: reqs.filter((q) => q.text.trim()).map((q) => ({ text: q.text.trim(), ...(q.url.trim() ? { url: q.url.trim() } : {}) })),
+        fields: fields.filter((x) => x.label.trim()).map((x) => ({ label: x.label.trim(), required: x.required })),
         image: image || (folderCover && /^(https|ipfs|ar):\/\//.test(folderCover) ? folderCover : undefined),
         banner: banner || undefined,
         category: category || undefined,
@@ -281,6 +285,25 @@ export function DropCreate() {
             {reqs.length < DROP_MAX_REQUIREMENTS && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReqs((l) => [...l, { text: "", url: "" }])}>Add a requirement</button>}
             <span className="xs mute">What bidders must do to keep what they win, like following the partner or engaging a post. Shown on the {spots ? "sale" : "drop"} page next to the bid box. Cloak can't check them: {spots ? "you or the partner check winners before whitelisting." : "you check them yourself."}</span>
           </div>
+          <div className="field">
+            <label><span>Bidder info</span><span>optional · {fields.length} of {DROP_MAX_FIELDS}</span></label>
+            {fields.map((x, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                <input className="input" value={x.label} maxLength={40} onChange={(e) => setFields((l) => l.map((y, j) => (j === i ? { ...y, label: e.target.value } : y)))} placeholder="Field name, like X username" aria-label={`Bidder field ${i + 1}`} />
+                <label className="check" style={{ margin: 0, whiteSpace: "nowrap" }}><input type="checkbox" checked={x.required} onChange={(e) => setFields((l) => l.map((y, j) => (j === i ? { ...y, required: e.target.checked } : y)))} /> required</label>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFields((l) => l.filter((_, j) => j !== i))} aria-label={`Remove bidder field ${i + 1}`}>Remove</button>
+              </div>
+            ))}
+            {fields.length < DROP_MAX_FIELDS && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFields((l) => [...l, { label: "", required: true }])}>+ Add a field</button>
+                {["X username", "Discord username"].filter((p) => !fields.some((x) => x.label.trim().toLowerCase() === p.toLowerCase())).map((p) => (
+                  <button key={p} type="button" className="btn btn-ghost btn-sm" onClick={() => setFields((l) => [...l, { label: p, required: true }])}>+ {p}</button>
+                ))}
+              </div>
+            )}
+            <span className="xs mute">What every bidder fills in when bidding, for the partner's winners sheet. The answers are sealed with each bid, so nobody reads them before bidding closes. Then they're columns in the {spots ? "list" : "winners"} CSV.</span>
+          </div>
           <div className="field-row">
             <div className="field"><label><span>{spots ? `${spotType} spots` : "Supply"}</span></label><input className="input" inputMode="numeric" value={f.supply} onChange={(e) => set("supply", e.target.value.replace(/\D/g, ""))} /></div>
             <div className="field"><label><span>Your price (floor)</span><span>HYPE</span></label><input className="input" inputMode="decimal" value={f.price} onChange={(e) => set("price", e.target.value)} /></div>
@@ -361,6 +384,7 @@ export function DropCreate() {
             {f.wlOn && <div className="row"><span className="mute">WL boost</span><span className="mono">{pct(f.boost * 100)}</span></div>}
             <div className="row"><span className="mute">Bidding</span><span>{f.biddingSecs === AT_TIME ? `until ${new Date(closeAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : DURATIONS.find(([, s]) => s === f.biddingSecs)?.[0]}{f.gtdOn ? `, after ${DURATIONS.find(([, s]) => s === f.gtdSecs)?.[0]} of GTD` : ""}</span></div>
             {reqs.some((q) => q.text.trim()) && <div className="row"><span className="mute">Requirements</span><span>{reqs.filter((q) => q.text.trim()).length}</span></div>}
+            {fields.some((x) => x.label.trim()) && <div className="row"><span className="mute">Bidders fill in</span><span style={{ textAlign: "right" }}>{fields.filter((x) => x.label.trim()).map((x) => x.label.trim()).join(", ")}</span></div>}
             {spots && <div className="row"><span className="mute">Winners name wallets</span><span>for {walletDays} day{walletDays > 1 ? "s" : ""}</span></div>}
             <div className="row"><span className="mute">Cloak fee</span><span>1.5% of sales</span></div>
           </div>

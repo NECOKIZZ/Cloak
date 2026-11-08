@@ -72,6 +72,7 @@ export function Drop({ drop }: { drop: Address }) {
   const going = useRef(false);
   const [price, setPrice] = useState("");
   const [listWallet, setListWallet] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [gtdQty, setGtdQty] = useState(1);
   const [to, setTo] = useState("");
@@ -206,7 +207,7 @@ export function Drop({ drop }: { drop: Address }) {
   const typed = (b: DropBid) => named[String(b.id)] ?? Array.from({ length: b.nfts }, (_, i) => onChain(b)[i] ?? (i === 0 ? pendingChoice(b) ?? "" : ""));
   const unit = sale ? "spot" : "NFT";
   function downloadCsv() {
-    const url = URL.createObjectURL(new Blob([CloakSpots.csv(winners)], { type: "text/csv" }));
+    const url = URL.createObjectURL(new Blob([CloakSpots.csv(winners, details.fields)], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = `${(sale?.partner || s!.name).replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}-${sk.toLowerCase()}-list.csv`;
@@ -425,6 +426,13 @@ export function Drop({ drop }: { drop: Address }) {
                     <div className="field"><label><span>Most you'd pay, each</span><span>HYPE, at least {hype(s.floor)}</span></label><input className="input mono" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
                     <div className="field"><label><span>{sale ? "Spots" : "How many"}</span></label><select className="input" value={qty} onChange={(e) => setQty(Number(e.target.value))}>{Array.from({ length: s.maxPerBid }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></div>
                   </div>
+                  {details.fields?.map((fd) => (
+                    <div className="field" key={fd.label}>
+                      <label><span>{fd.label}</span><span>{fd.required ? "required" : "optional"} · sealed with your bid</span></label>
+                      <input className="input" value={answers[fd.label] ?? ""} maxLength={100} onChange={(e) => setAnswers((a) => ({ ...a, [fd.label]: e.target.value }))} placeholder={/x username|twitter/i.test(fd.label) ? "@yourname" : fd.label} />
+                    </div>
+                  ))}
+                  {!!details.fields?.length && <p className="xs mute" style={{ marginTop: -6, marginBottom: 12 }}>{sale ? sale.partner : "The creator"} needs this from every winner. It's sealed inside your bid: nobody can read it until bidding closes.</p>}
                   {sale && (
                     <div className="field">
                       <label><span>Wallet for the {sk} list</span><span>optional</span></label>
@@ -445,7 +453,9 @@ export function Drop({ drop }: { drop: Address }) {
                     const c = dropsClient(w);
                     // read the WL fresh: a quick click must never send a WL wallet's bid without its boost
                     const listed = await c.listed(drop, w.account.address);
-                    const r = await c.bid(drop, { price: priceWei, quantity: qty, wl: listed.wl });
+                    const missing = details.fields?.find((fd) => fd.required && !(answers[fd.label] ?? "").trim());
+                    if (missing) throw new Hint(`Fill in "${missing.label}" first: this sale needs it from every bidder.`);
+                    const r = await c.bid(drop, { price: priceWei, quantity: qty, wl: listed.wl, fields: answers });
                     if (sale && listWallet && getAddress(listWallet) !== getAddress(w.account.address)) saveListWallet(drop, r.id, getAddress(listWallet));
                     return r.txHash;
                   })}>{busy || (wallet ? `Seal a bid for ${qty} at ${hype(level)} HYPE` : "Connect wallet to bid")}</button>
@@ -503,7 +513,7 @@ export function Drop({ drop }: { drop: Address }) {
                   <div className="drop-bids">
                     {mine.map((b) => (
                       <div key={String(b.id)}>
-                        <span className="small"><span className="mono">{b.revealed ? `${b.quantity} × ${hype(b.price)} HYPE` : `Sealed bid · ${hype(b.deposit)} HYPE deposit`}</span>{b.wl && <span className="pill ok" style={{ marginLeft: 6 }}>WL</span>}{sale && !s.settled && savedListWallet(drop, b.id) && <span className="xs mute" style={{ marginLeft: 6 }}>list wallet {shortAddr(savedListWallet(drop, b.id)!)}, kept in this browser</span>}</span>
+                        <span className="small"><span className="mono">{b.revealed ? `${b.quantity} × ${hype(b.price)} HYPE` : `Sealed bid · ${hype(b.deposit)} HYPE deposit`}</span>{b.wl && <span className="pill ok" style={{ marginLeft: 6 }}>WL</span>}{!s.settled && !!details.fields?.length && <span className="xs mute" style={{ marginLeft: 6 }}>your info is sealed with it</span>}{sale && !s.settled && savedListWallet(drop, b.id) && <span className="xs mute" style={{ marginLeft: 6 }}>list wallet {shortAddr(savedListWallet(drop, b.id)!)}, kept in this browser</span>}</span>
                         <span className="small mute">
                           {!s.settled ? (b.revealed ? "opened" : "sealed") : s.phase !== "settled" ? "settling" : !b.revealed ? `never opened · ${b.deposit ? Number(((b.deposit - b.refund) * 100n) / b.deposit) : 0}% kept` : b.nfts ? `won ${b.nfts}${sale ? ` spot${b.nfts > 1 ? "s" : ""}` : ""}${wonIds[String(b.id)]?.length ? ` (${wonIds[String(b.id)].map((x) => `#${x}`).join(", ")})` : ""} · paid ${hype(b.paid)}` : "not won"}
                           {s.phase === "settled" && (b.claimed ? " · delivered" : b.refund > 0n ? ` · ${hype(b.refund)} back` : "")}
@@ -594,7 +604,7 @@ export function Drop({ drop }: { drop: Address }) {
                     {listRows.map((r, i) => (
                       <div key={`${r.bidId}-${i}`}>
                         <span className="small mono" style={{ overflowWrap: "anywhere" }}>{r.wallet ?? "no wallet yet"}</span>
-                        <span className="xs mute">bid #{String(r.bidId)}{r.source === "bidder" ? " · bidding wallet" : r.source === "named" ? " · named" : ""}</span>
+                        <span className="xs mute">{Object.values(r.fields).length ? `${Object.values(r.fields).join(" · ")} · ` : ""}bid #{String(r.bidId)}{r.source === "bidder" ? " · bidding wallet" : r.source === "named" ? " · named" : ""}</span>
                       </div>
                     ))}
                   </div>
