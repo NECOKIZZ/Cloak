@@ -63,9 +63,10 @@ const opts = {
   description: c.description,
   links: c.links,
   requirements: c.requirements,
+  fields: c.fields,
 };
 
-const json = JSON.stringify({ v: 1, image: opts.image, banner: opts.banner, links: opts.links, category: opts.category, description: opts.description, requirements: opts.requirements, spots: { partner: opts.partner, kind } });
+const json = JSON.stringify({ v: 1, image: opts.image, banner: opts.banner, links: opts.links, category: opts.category, description: opts.description, requirements: opts.requirements, fields: opts.fields, spots: { partner: opts.partner, kind } });
 const size = new TextEncoder().encode(json).length;
 const closeAt = Math.floor(Date.parse(c.closeAt) / 1000);
 if (!Number.isFinite(closeAt)) throw new Error(`closeAt isn't a date: ${c.closeAt}`);

@@ -8,7 +8,7 @@
  */
 import { getAddress, isAddress, type Address, type Hex } from "viem";
 import { cloakSpotBookAbi } from "./abis.js";
-import { CloakDrops, type CreateDropOptions, type DropBid, type SpotKind } from "./drops.js";
+import { CloakDrops, type CreateDropOptions, type DropBid, type DropField, type SpotKind } from "./drops.js";
 
 /** How long winners have to name their wallets, by default, once bids are opened. */
 export const SPOT_DEFAULT_WALLET_DAYS = 3;
@@ -27,6 +27,8 @@ export interface SpotWinner {
   bidder: Address;
   spots: number;
   wallets: Address[];
+  /** The winner's answers to the sale's bid fields (an X username, say), from its sealed bid. */
+  fields?: Record<string, string>;
 }
 
 /** One spot on the partner's list: its wallet, and whether the winner named it or it's the wallet that bid. */
@@ -35,6 +37,8 @@ export interface SpotRow {
   bidId: bigint;
   bidder: Address;
   source: "named" | "bidder" | "none";
+  /** The winner's answers to the sale's bid fields, on every row of its bid. */
+  fields: Record<string, string>;
 }
 
 export type CreateSpotSaleOptions = Omit<CreateDropOptions, "gtd" | "baseURI" | "spots"> & {
@@ -111,7 +115,9 @@ export class CloakSpots {
     const all = bids ?? (await this.drops.bids(drop));
     const won = all.filter((b) => b.nfts > 0);
     const [ids, wallets] = await this.pc.readContract({ address: this.book, abi: cloakSpotBookAbi, functionName: "list", args: [drop] });
-    return won.map((b) => ({ bidId: b.id, bidder: b.bidder, spots: b.nfts, wallets: wallets.filter((_, i) => ids[i] === b.id) }));
+    // the sale's bid fields, read from the opened sealed bids
+    const answers = won.length && (await this.drops.details(drop)).fields?.length ? await this.drops.bidFields(drop) : new Map<bigint, Record<string, string>>();
+    return won.map((b) => ({ bidId: b.id, bidder: b.bidder, spots: b.nfts, wallets: wallets.filter((_, i) => ids[i] === b.id), ...(answers.get(b.id) ? { fields: answers.get(b.id) } : {}) }));
   }
 
   /** Name the wallets to whitelist for a winning bid of the connected wallet: one per spot. Replaces earlier ones. */
@@ -141,24 +147,27 @@ export class CloakSpots {
     for (const w of winners) {
       for (let i = 0; i < w.spots; i++) {
         const own = w.wallets[i];
-        if (own) out.push({ wallet: own, bidId: w.bidId, bidder: w.bidder, source: "named" });
+        if (own) out.push({ wallet: own, bidId: w.bidId, bidder: w.bidder, source: "named", fields: w.fields ?? {} });
         else if (i === 0 && !w.wallets.length && !named.has(w.bidder.toLowerCase()) && !used.has(w.bidder.toLowerCase())) {
           used.add(w.bidder.toLowerCase());
-          out.push({ wallet: w.bidder, bidId: w.bidId, bidder: w.bidder, source: "bidder" });
-        } else out.push({ wallet: null, bidId: w.bidId, bidder: w.bidder, source: "none" });
+          out.push({ wallet: w.bidder, bidId: w.bidId, bidder: w.bidder, source: "bidder", fields: w.fields ?? {} });
+        } else out.push({ wallet: null, bidId: w.bidId, bidder: w.bidder, source: "none", fields: w.fields ?? {} });
       }
     }
     return out;
   }
 
   /**
-   * The list as CSV, one row per spot: the wallet to list (blank only if a spot has none), the bid, the bidder, and
-   * where the wallet came from. A partner lists the `wallet` column.
+   * The winners sheet as CSV, one row per spot: id (1, 2, …), one column per bid field (the sale's `fields`, or every
+   * field any winner answered), the wallet to list (blank only if a spot has none), the bid, the bidder, and where the
+   * wallet came from. A partner lists the `wallet` column.
    */
-  static csv(winners: SpotWinner[]): string {
+  static csv(winners: SpotWinner[], fields?: DropField[]): string {
     const status = { named: "named by winner", bidder: "bidding wallet", none: "no wallet yet" } as const;
-    const rows = ["wallet,bid,bidder,status"];
-    for (const r of CloakSpots.rows(winners)) rows.push(`${r.wallet ?? ""},${r.bidId},${r.bidder},${status[r.source]}`);
+    const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const labels = fields?.length ? fields.map((f) => f.label) : [...new Set(winners.flatMap((w) => Object.keys(w.fields ?? {})))];
+    const rows = [["id", ...labels, "wallet", "bid", "bidder", "status"].map(cell).join(",")];
+    CloakSpots.rows(winners).forEach((r, i) => rows.push([String(i + 1), ...labels.map((l) => cell(r.fields[l] ?? "")), r.wallet ?? "", String(r.bidId), r.bidder, status[r.source]].join(",")));
     return rows.join("\n") + "\n";
   }
 }

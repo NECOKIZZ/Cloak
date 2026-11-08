@@ -1,0 +1,19 @@
+{
+  "partner": "Grump Guys",
+  "kind": "GTD",
+  "spots": 10,
+  "floor": "0.1",
+  "maxPerBid": 1,
+  "closeAt": "2026-11-09T07:00:00+01:00",
+  "walletDays": 1,
+  "name": "Grump Guys GTD spots",
+  "symbol": "GRUMPGTD",
+  "category": "PFP",
+  "description": "10 Grump Guys GTD spots for the Cloak community. Grump Guys are grumpy little aliens invading the Elysium ecosystem, one at a time: 5,000 of them, made for agents, not humans. Small in size, big on attitude, and definitely not here to ask for permission. Mint on Elysium (price TBA). Bid sealed: nobody sees a bid until bidding closes, the top 10 win, and every winner pays the same price. The wallet you bid from goes on the GTD list, so bid from the wallet you'll mint with.",
+  "links": { "x": "https://x.com/grumpguysnft" },
+  "requirements": [
+    { "text": "Follow @grumpguysnft on X", "url": "https://x.com/grumpguysnft" },
+    { "text": "Like and RT the collab post", "url": "https://x.com/grumpguysnft/status/2117962232374157599" }
+  ],
+  "fields": [{ "label": "X username", "required": true }]
+}

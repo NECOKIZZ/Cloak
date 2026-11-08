@@ -61,6 +61,7 @@ const { drop } = await team.create({
   name: "Etherea Genesis GTD spots", symbol: "ETHERGTD", supply: 20, floor: parseEther("0.05"), numTicks: 200,
   biddingSecs: closeAt - now0 - 90, revealSecs: 40, partner: "Etherea Genesis", kind: "GTD", walletDays: 1,
   description: "20 Etherea Genesis GTD spots for the Cloak community.", requirements: REQS,
+  fields: [{ label: "X username", required: true }, { label: "Discord", required: false }],
   links: { website: "https://ethereagenesis.xyz", x: "https://x.com/EthereaGenesis" },
 });
 let s = await team.drops.get(drop);
@@ -73,6 +74,7 @@ ok(det.requirements?.length === 3 && det.requirements[0].url === REQS[0].url && 
 ok(s.supply === 20 && s.maxPerBid === 1 && s.floor === parseEther("0.05") && !s.hasGtd, "20 spots, one per bid, 0.05 HYPE floor");
 ok(Math.abs(s.commitEnd - closeAt) <= 3, `bidding closes at the time set (off by ${s.commitEnd - closeAt} s)`);
 ok(det.links?.x === "https://x.com/EthereaGenesis", "links published");
+ok(det.fields?.length === 2 && det.fields[0].label === "X username" && det.fields[0].required && !det.fields[1].required, "bid fields published: X username (required), Discord (optional)");
 
 // ── 2. 22 wallets bid sealed; one tries under the floor ──
 const wallet = async () => {
@@ -84,10 +86,12 @@ const wallet = async () => {
 const ws = [];
 for (let i = 0; i < 22; i++) ws.push(await wallet());
 await waitChainTime(d.publicClient, s.gtdEnd);
-await fails(ws[0].drops.bid(drop, { price: parseEther("0.04"), quantity: 1 }), /floor|price|level|tick/i, "a bid under the floor is refused");
+await fails(ws[0].drops.bid(drop, { price: parseEther("0.04"), quantity: 1, fields: { "X username": "@x" } }), /floor|price|level|tick/i, "a bid under the floor is refused");
 const bid = {};
 // prices 0.05 … 0.155 in 0.005 steps; the top 20 win, the two at 0.05 and 0.055 lose
-for (let i = 0; i < ws.length; i++) bid[ws[i].addr] = await ws[i].drops.bid(drop, { price: parseEther("0.05") + parseEther("0.005") * BigInt(i), quantity: 1 });
+await fails(ws[0].drops.bid(drop, { price: parseEther("0.05"), quantity: 1 }), /Fill in "X username"/, "a bid without the required X username is refused before sending");
+for (let i = 0; i < ws.length; i++) bid[ws[i].addr] = await ws[i].drops.bid(drop, { price: parseEther("0.05") + parseEther("0.005") * BigInt(i), quantity: 1, fields: { "X username": ` @fan${i} `, ...(i === 21 ? { Discord: "fan21#0001" } : {}) } });
+ok((await team.drops.bidFields(drop)).size === 0, "the answers are sealed: nobody can read them before bidding closes");
 ok((await team.drops.get(drop)).bids === 22, "22 sealed bids in");
 
 // ── 3. open and settle (the keeper's part) ──
@@ -110,7 +114,10 @@ ok(winners.length === 20 && winners.every((w) => !w.wallets.length), "20 winners
 ok(rows.length === 20 && rows.every((r) => r.source === "bidder" && r.wallet && winnersSet.has(r.wallet.toLowerCase())), "each spot already has its winner's bidding wallet");
 ok(!rows.some((r) => [ws[0].addr, ws[1].addr].map((x) => x.toLowerCase()).includes(r.wallet.toLowerCase())), "losing wallets aren't on the list");
 const csv0 = CloakSpots.csv(winners).trim().split("\n");
-ok(csv0.length === 21 && csv0.slice(1).every((r) => /^0x[0-9a-fA-F]{40},\d+,0x[0-9a-fA-F]{40},bidding wallet$/.test(r)), "the CSV has 20 wallets, no blanks, ready for Etherea");
+ok(csv0.length === 21 && csv0[0] === "id,X username,Discord,wallet,bid,bidder,status" && csv0.slice(1).every((r, i) => new RegExp(`^${i + 1},@fan\\d+,[^,]*,0x[0-9a-fA-F]{40},\\d+,0x[0-9a-fA-F]{40},bidding wallet$`).test(r)), "the CSV has id, the bid fields and 20 wallets, no blanks");
+const top0 = CloakSpots.rows(winners).find((r) => r.bidder.toLowerCase() === ws[21].addr.toLowerCase());
+ok(top0?.fields["X username"] === "@fan21" && top0?.fields.Discord === "fan21#0001", "each winner's sealed answers are on its row, trimmed");
+ok(!CloakSpots.csv(winners).includes("@fan0,") && !CloakSpots.csv(winners).includes("@fan1,"), "losing bids' answers are not on the sheet");
 
 // ── 5. a winner swaps in another wallet; one names another winner's wallet ──
 const top = ws[21];
