@@ -1,10 +1,11 @@
 <!doctype html>
 <!--
-  Partner collab video: the generated walk-in clip, untouched, with light Cloak touches and an end card.
-  Assets in assets/: gen.mp4 (the clip, re-encoded 24 fps, keyframe every 24), last.jpg (its last frame, 1920x1080),
-  pfp.jpg, intertight.woff2, mono.woff2, gsap.min.js (vendored: jsDelivr is blocked). See ../SKILL.md section 6.
-  Every line marked EDIT changes per partner. If the clip isn't ~8 s, move CLIP_END everywhere it appears
-  (gen data-duration, freeze/end data-start, T_OUT, T_END) and the cues in cues.json.
+  Partner collab video (house style since Grump Guys): the generated clip plays untouched with NO pills or captions
+  over it; over its last second it blurs and dims, the last frame holds blurred, and the end graphics land as plain
+  type (eyebrow, Cloak mark x PFP, title, link with a drawn teal line, close line). See ../SKILL.md section 6.
+  Assets: gen.mp4 (24 fps, keyframe every 24), last.jpg (last frame at 1920x1080), pfp.jpg, fonts, gsap.min.js.
+  EDIT: series number, count and kind, sale link (shortened address), close line, and clip-length timings
+  (gen data-duration = clip length - 0.1; blur starts ~1 s before the end; freeze/end start at clip length - 0.15).
 -->
 <html lang="en">
   <head>
@@ -16,85 +17,75 @@
       @font-face { font-family: "Mono"; src: url("assets/mono.woff2") format("woff2"); font-weight: 100 900; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0b1013; }
-      :root { --ink: #eef1f0; --mute: rgba(238, 241, 240, 0.72); --line: rgba(238, 241, 240, 0.16); --sig: #6cb6cb; }
+      :root { --ink: #eef1f0; --mute: rgba(238, 241, 240, 0.78); --sig: #6cb6cb; }
       #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: "Inter Tight", sans-serif; color: var(--ink); }
       #gen { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; }
+      /* the clip's last frame, held blurred under the end graphics */
       #freeze { position: absolute; inset: 0; }
-      #freeze img { position: absolute; inset: -40px; width: 2000px; height: 1160px; object-fit: cover; }
-      #freeze .dim { position: absolute; inset: 0; background: radial-gradient(1200px 760px at 50% 50%, rgba(11, 16, 19, 0.6), rgba(11, 16, 19, 0.86)); }
-      .glassy { background: rgba(11, 16, 19, 0.66); border: 1px solid var(--line); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+      #freeze img { position: absolute; inset: -60px; width: 2040px; height: 1200px; object-fit: cover; filter: blur(22px); }
+      #veil { position: absolute; inset: 0; background: radial-gradient(1100px 700px at 50% 52%, rgba(11, 16, 19, 0.58), rgba(11, 16, 19, 0.86)); }
       .soft { will-change: transform, opacity, filter; }
 
-      /* a small series tag, top centre */
-      #tag { position: absolute; left: 50%; top: 48px; transform: translateX(-50%); padding: 12px 24px; border-radius: 999px; font-family: "Mono"; font-size: 20px; letter-spacing: 0.22em; color: var(--ink); display: flex; align-items: center; gap: 12px; white-space: nowrap; }
-      #tag i { width: 9px; height: 9px; border-radius: 50%; background: var(--sig); box-shadow: 0 0 12px var(--sig); }
-      /* the partner caption, bottom left */
-      #cap { position: absolute; left: 64px; bottom: 64px; padding: 12px 28px 12px 12px; border-radius: 999px; display: flex; align-items: center; gap: 16px; }
-      #cap img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px rgba(108, 182, 203, 0.7); }
-      #cap b { font-size: 28px; font-weight: 500; letter-spacing: -0.02em; }
-      #cap span { font-size: 28px; color: var(--mute); }
-      #cap em { font-style: normal; color: var(--sig); }
-
-      /* end card */
-      #end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-      #pair { display: flex; align-items: center; gap: 44px; }
+      /* end graphics: type and marks only, no pills */
+      #end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-shadow: 0 2px 28px rgba(11, 16, 19, 0.85); }
+      #eyebrow { font-family: "Mono"; font-size: 20px; letter-spacing: 0.3em; color: var(--mute); display: flex; align-items: center; gap: 14px; margin-bottom: 44px; }
+      #eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--sig); box-shadow: 0 0 14px var(--sig); }
+      #pair { display: flex; align-items: center; gap: 46px; }
       #pair .cm { height: 150px; filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.5)); }
       #pair .x { font-size: 64px; color: var(--mute); font-weight: 300; }
-      #pair img { width: 170px; height: 170px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px rgba(108, 182, 203, 0.8), 0 0 60px rgba(255, 236, 200, 0.4); }
-      #title { margin-top: 48px; font-size: 80px; font-weight: 500; letter-spacing: -0.04em; text-shadow: 0 2px 30px rgba(11, 16, 19, 0.8); }
+      #pair img { width: 170px; height: 170px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px rgba(108, 182, 203, 0.85), 0 0 70px rgba(108, 182, 203, 0.35); }
+      #title { margin-top: 46px; font-size: 84px; font-weight: 500; letter-spacing: -0.04em; }
       #title span { color: var(--sig); }
-      #url { margin-top: 30px; padding: 18px 34px; border-radius: 999px; font-family: "Mono"; font-size: 32px; display: flex; align-items: center; gap: 16px; }
-      #url svg { width: 28px; height: 28px; color: var(--sig); }
-      #sub { margin-top: 30px; font-family: "Mono"; font-size: 22px; letter-spacing: 0.12em; color: var(--mute); display: flex; align-items: center; gap: 12px; text-shadow: 0 2px 16px rgba(11, 16, 19, 0.9); }
-      #sub i { width: 10px; height: 10px; border-radius: 50%; background: var(--sig); }
+      #link { margin-top: 34px; position: relative; font-family: "Mono"; font-size: 34px; letter-spacing: 0.01em; padding-bottom: 14px; }
+      #link .line { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, rgba(108, 182, 203, 0), var(--sig) 18%, var(--sig) 82%, rgba(108, 182, 203, 0)); transform-origin: 50% 50%; }
+      #sub { margin-top: 30px; font-family: "Mono"; font-size: 22px; letter-spacing: 0.16em; color: var(--mute); }
+      #sub b { color: var(--sig); font-weight: 400; }
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="11" data-width="1920" data-height="1080">
-      <video id="gen" class="clip" src="assets/gen.mp4" data-has-audio="true" data-volume="1" data-fade-out="0.4" data-start="0" data-duration="7.95" data-track-index="0"></video><!-- EDIT CLIP_END: data-duration = clip length - 0.1 -->
-      <audio id="score" src="assets/score.wav" data-start="0" data-duration="11" data-volume="0.9" data-track-index="5"></audio>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="11.5" data-width="1920" data-height="1080">
+      <video id="gen" class="clip" src="assets/gen.mp4" data-has-audio="true" data-volume="1" data-fade-out="0.6" data-start="0" data-duration="7.95" data-track-index="0"></video>
+      <audio id="score" src="assets/score.wav" data-start="0" data-duration="11.5" data-volume="0.9" data-track-index="5"></audio>
 
-      <div id="freeze" class="clip" data-start="7.9" data-duration="3.1" data-track-index="1"><img src="assets/last.jpg" alt="" /><div class="dim"></div></div>
+      <!-- the blur builds over the clip's last second, then the frozen last frame holds it -->
+      <div id="blurpass" class="clip" data-start="6.9" data-duration="1.1" data-track-index="1" style="position:absolute;inset:0;backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px)"></div>
+      <div id="freeze" class="clip" data-start="7.9" data-duration="3.6" data-track-index="2"><img src="assets/last.jpg" alt="" /></div>
+      <div id="veilc" class="clip" data-start="6.9" data-duration="4.6" data-track-index="3"><div id="veil"></div></div>
 
-      <div id="over" class="clip" data-start="0" data-duration="7.95" data-track-index="2">
-        <div id="tag" class="glassy soft"><i></i>CLOAK PARTNERS · 01</div><!-- EDIT series number -->
-        <div id="cap" class="glassy soft"><img src="assets/pfp.jpg" alt="" /><b>Etherea Genesis</b><!-- EDIT partner --><span>× <em>Cloak</em></span></div>
-      </div>
-
-      <div id="endc" class="clip" data-start="7.9" data-duration="3.1" data-track-index="3">
+      <div id="endc" class="clip" data-start="7.9" data-duration="3.6" data-track-index="4">
         <div id="end">
+          <div id="eyebrow" class="soft"><i></i>CLOAK PARTNERS · 02</div>
           <div id="pair">
             <svg class="cm soft" id="mark" viewBox="0 0 279 322"><path d="M149.671 0C119.989 12.7135 73.3456 40.2595 58.5046 74.1622C41.5434 118.659 37.3031 192.822 3.38073 266.984C-2.97971 279.697 -0.859564 288.173 13.9815 294.53C62.7449 317.838 117.869 326.314 160.272 319.957C209.035 315.719 247.198 298.768 279 275.459L232.357 209.773C213.275 230.962 187.834 243.676 160.272 245.795C117.869 250.032 86.0665 226.724 86.0665 186.465C86.0665 137.73 115.749 93.2324 149.671 69.9243C172.993 84.7568 194.194 108.065 206.915 133.492L257.799 103.827C234.477 57.2108 189.954 19.0703 149.671 0Z" fill="#EEF1F0" /></svg>
             <span class="x soft" id="x">×</span>
             <img id="epfp" src="assets/pfp.jpg" alt="" class="soft" />
           </div>
-          <div id="title" class="soft"><span>20</span> GTD spots live on <span>Cloak</span></div><!-- EDIT count and kind -->
-          <div id="url" class="glassy soft"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>cloak.boblabs.tech/app/drop/0xbFD2…9E98</div><!-- EDIT sale link (shortened address) -->
-          <div id="sub" class="soft"><i></i>SEALED BIDS · CLOSE TONIGHT 00:00 WAT</div><!-- EDIT close line -->
+          <div id="title" class="soft"><span>10</span> GTD spots live on <span>Cloak</span></div>
+          <div id="link" class="soft">cloak.boblabs.tech/app/drop/0x6Eb3…e8E9<div class="line"></div></div>
+          <div id="sub" class="soft"><b>●</b>&nbsp; SEALED BIDS · CLOSE 07:00 WAT</div>
         </div>
       </div>
     </div>
 
     <script>
       const tl = gsap.timeline({ paused: true });
-      const T_TAG = 0.4, T_CAP = 2.6, T_OUT = 7.45, T_END = 8.15; // EDIT with the clip length (T_OUT = CLIP_END - 0.5)
+      const T_BLUR = 6.9, T_END = 8.25;
 
-      // over the generated clip: a small tag, then the partner caption once the hall opens up
-      tl.fromTo("#tag", { opacity: 0, y: -12, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.7, ease: "power3.out" }, T_TAG);
-      tl.fromTo("#cap", { opacity: 0, x: -24, filter: "blur(12px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.75, ease: "power3.out" }, T_CAP);
-      tl.to(["#tag", "#cap"], { opacity: 0, filter: "blur(12px)", duration: 0.4, ease: "power2.in" }, T_OUT);
+      // the last second of the clip softens: blur builds and a dark veil comes up, then the frozen frame takes over
+      tl.fromTo("#blurpass", { backdropFilter: "blur(0px)", webkitBackdropFilter: "blur(0px)" }, { backdropFilter: "blur(22px)", webkitBackdropFilter: "blur(22px)", duration: 1.0, ease: "power2.inOut" }, T_BLUR);
+      tl.fromTo("#veil", { opacity: 0 }, { opacity: 1, duration: 1.1, ease: "power2.out" }, T_BLUR);
+      tl.fromTo("#freeze img", { scale: 1 }, { scale: 1.05, duration: 3.6, ease: "sine.inOut" }, 7.9);
 
-      // the last frame softens behind the end card
-      tl.fromTo("#freeze img", { filter: "blur(0px)", scale: 1 }, { filter: "blur(18px)", scale: 1.05, duration: 0.9, ease: "power2.out" }, 7.9);
-      tl.fromTo("#freeze img", { scale: 1.05 }, { scale: 1.09, duration: 2.2, ease: "sine.inOut", immediateRender: false }, 8.8);
-      tl.fromTo("#freeze .dim", { opacity: 0 }, { opacity: 1, duration: 0.8, ease: "power2.out" }, 7.9);
-
-      tl.fromTo("#mark", { opacity: 0, x: 120, filter: "blur(12px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, T_END);
-      tl.fromTo("#epfp", { opacity: 0, x: -120, filter: "blur(12px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, T_END);
+      // end graphics
+      tl.fromTo("#eyebrow", { opacity: 0, y: -10, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, T_END - 0.15);
+      tl.fromTo("#mark", { opacity: 0, x: 120, filter: "blur(12px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.65, ease: "power3.out" }, T_END);
+      tl.fromTo("#epfp", { opacity: 0, x: -120, filter: "blur(12px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.65, ease: "power3.out" }, T_END);
       tl.fromTo("#x", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2)" }, T_END + 0.25);
       tl.fromTo("#title", { opacity: 0, y: 16, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.7, ease: "power3.out" }, T_END + 0.45);
-      tl.fromTo("#url", { opacity: 0, y: 14, scale: 0.96, filter: "blur(10px)" }, { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: 0.65, ease: "power3.out" }, T_END + 0.72);
-      tl.fromTo("#sub", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.out" }, T_END + 1.0);
+      tl.fromTo("#link", { opacity: 0, y: 12, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.6, ease: "power3.out" }, T_END + 0.72);
+      tl.fromTo("#link .line", { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: "power3.inOut" }, T_END + 0.8);
+      tl.fromTo("#sub", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.out" }, T_END + 1.15);
+      tl.fromTo("#sub b", { opacity: 1 }, { opacity: 0.35, duration: 0.5, ease: "sine.inOut", yoyo: true, repeat: 3 }, T_END + 1.4);
 
       window.__timelines = window.__timelines || {};
       window.__timelines["main"] = tl;

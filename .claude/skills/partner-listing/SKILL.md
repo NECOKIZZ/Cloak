@@ -140,24 +140,24 @@ fill the two brackets and nothing else:
 Etherea: CHARACTER = "a black and white rubber-hose cartoon wolf with a huge grin, white gloves and a shiny round belly,
 1930s cartoon style", GESTURE = "a big wink and a thumbs up".
 
-**Keep the touches light** (the user does not want heavy motion design over it). `video/` is the template:
-the clip plays untouched, a small "CLOAK PARTNERS · NN" tag at the top, a caption pill (PFP + "Partner × Cloak")
-bottom left from ~2.6 s, both fading before the gesture ends, then the last frame blurs into a 3 s end card
-(Cloak mark × PFP, "N GTD spots live on Cloak", the sale link, "SEALED BIDS · CLOSE …"). The clip's own audio stays;
-the score adds only a swell and chime on the end card.
+**House style (the user's call): no pills or captions over the clip.** The clip plays untouched; over its last
+second it blurs (backdrop blur 0 to 22 px) and a dark veil comes up; the last frame holds blurred; the end graphics land
+as plain type: "CLOAK PARTNERS · NN" eyebrow, Cloak mark × PFP, "N GTD spots live on Cloak", the sale link with a teal
+line drawing in under it, "SEALED BIDS · CLOSE …" with a pulsing dot. The clip's own audio stays; the score adds a
+swell, pop and chime on the end card. `video/` is the template (Grump Guys, 11.5 s).
 
 ```bash
 P=<scratchpad>/motion/<slug>-walkin
-mkdir -p $P/assets && cp .claude/skills/partner-listing/video/{index.html,cues.json} $P/
+mkdir -p $P/assets && cp .claude/skills/partner-listing/video/{index.html,cues.json} $P/   # then edit the EDIT items
 cp .claude/skills/cloak-motion/assets/{intertight.woff2,mono.woff2} $P/assets/   # + vendored gsap.min.js (section 2)
 ffmpeg -i <clip.mp4> -c:v libx264 -r 24 -g 24 -keyint_min 24 -crf 14 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart $P/assets/gen.mp4
 ffmpeg -ss <clip length - 0.15> -i $P/assets/gen.mp4 -frames:v 1 -vf scale=1920:1080:flags=lanczos -q:v 2 $P/assets/last.jpg
 cp <pfp> $P/assets/pfp.jpg
 # edit the EDIT lines in index.html (series no, partner, count + kind, link, close line) and the clip length
-bash .claude/skills/cloak-motion/scripts/build.sh $P <scratchpad>/motion/<slug>-collab.mp4 "1 3.6 6.2 8.6 10.5"
+bash .claude/skills/cloak-motion/scripts/build.sh $P <scratchpad>/motion/<slug>-collab.mp4 "3 6.6 7.3 7.85 8.6 11.2"
 ```
 
-`check` must show 0 contrast errors; over bright clouds keep the pills at 0.66 dark fill. Put the sale link on the end
+`check` must show 0 contrast errors; Put the sale link on the end
 card once the sale exists (shorten the address: `0xbFD2…9E98`). Copy rules from cloak-motion apply (no em dashes,
 colons or semicolons in on-screen text; partner logos are fine because it's a real partnership).
 
@@ -207,3 +207,4 @@ Attach the video; suggest quote-tweeting the partner's collab post.
 | Date | Partner | Kind | Spots | Floor | Drop |
 |---|---|---|---|---|---|
 | 2026-11-08 | Etherea Genesis | GTD | 20 | 0.05 HYPE | `0xbFD23E77165f77235456f7aC79F1D6A380c49E98` |
+| 2026-11-08 | Grump Guys | GTD | 10 (of 15; 5 raffled by us) | 0.1 HYPE | `0x6Eb3AeEd266AEeB23B307De519051eD80945e8E9` |

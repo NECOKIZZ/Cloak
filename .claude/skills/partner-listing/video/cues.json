@@ -1,7 +1,8 @@
 {
-  "duration": 11,
-  "pad": [[7.6, 3.4, "Gmaj7/B"]],
-  "whoosh": [[7.85, 0.6]],
-  "lockup": [8.15],
-  "chime": [8.85]
+  "duration": 11.5,
+  "pad": [[7.2, 4.3, "Gmaj7/B"]],
+  "whoosh": [[7.1, 0.9]],
+  "lockup": [8.25],
+  "pop": [9.05],
+  "chime": [9.6]
 }
