@@ -14,7 +14,7 @@ const env = import.meta.env as Record<string, string | undefined>;
 
 /** Team wallets, by chain id: drops they create are verified. */
 const CREATORS: Record<number, string[]> = {
-  99801: [],
+  99801: ["0x858f3232e7d6702f20c4d3feab987a405d225f4e"], // Cloak team
 };
 /** Approved drops, by chain id. */
 const DROPS: Record<number, string[]> = {

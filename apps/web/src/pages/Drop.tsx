@@ -203,7 +203,7 @@ export function Drop({ drop }: { drop: Address }) {
     ...(s.hasGtd ? [{ name: "GTD mint", when: `${hype(s.gtdPrice)} HYPE · ends ${when(s.gtdEnd)}`, state: (s.phase === "gtd" ? "live" : "done") as "live" | "done" }] : []),
     { name: "Sealed bidding", when: `from ${hype(s.floor)} HYPE · closes ${when(s.commitEnd)}`, state: s.phase === "gtd" ? "next" : s.phase === "bidding" ? "live" : "done" },
     { name: "Bids open", when: `drand round ${s.tlockRound} · by ${when(s.revealEnd)} at the latest`, state: opening ? "live" : s.phase === "settled" ? "done" : "next" },
-    { name: sale ? "Winners name wallets" : "Results and delivery", when: sale ? `until ${when(sale.deadline)}` : "one price for every winner, refunds for the rest", state: s.phase === "settled" ? (sale && now < sale.deadline ? "live" : "done") : "next" },
+    { name: sale ? "Winners can change wallets" : "Results and delivery", when: sale ? `until ${when(sale.deadline)}` : "one price for every winner, refunds for the rest", state: s.phase === "settled" ? (sale && now < sale.deadline ? "live" : "done") : "next" },
   ];
   // the bar shows sales once settled, else how far through the current window we are
   const winStart = s.phase === "gtd" ? s.gtdEnd - Math.max(600, s.commitEnd - s.gtdEnd) : s.phase === "bidding" ? (s.hasGtd ? s.gtdEnd : s.commitEnd - Math.max(600, s.commitEnd - s.gtdEnd)) : 0;
@@ -293,7 +293,7 @@ export function Drop({ drop }: { drop: Address }) {
                   {s.hasWl && <li>WL bids rank {pct(s.wlBoostBps)} higher, and WL winners pay {pct(s.wlBoostBps)} less, never under the floor.</li>}
                   <li>The highest bids win, and every winner pays one price: the lowest winning bid. Ties at that price are drawn at random.</li>
                   <li>The wallet you bid with goes on the {sk} list, so winners don't need to do anything. To use another wallet, change it until {new Date(sale.deadline * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Everyone else gets their deposit back.</li>
-                  {!!reqs?.length && <li>{sale.partner} only honours winners who meet the requirements below, so do them before you bid.</li>}
+                  {!!reqs?.length && <li>{sale.partner} only honours winners who meet the requirements listed with the bid box, so do them before you bid.</li>}
                   <li>The {sk} list on this page is the list {sale.partner} receives, with a CSV to download.</li>
                 </ol>
                 ) : (
@@ -334,7 +334,7 @@ export function Drop({ drop }: { drop: Address }) {
                   {s.hasWl && <li>WL bids rank {pct(s.wlBoostBps)} higher, and WL winners pay {pct(s.wlBoostBps)} less, never under the floor.</li>}
                   <li>The highest bids win, and every winner pays one price: the lowest winning bid. Ties at that price are drawn at random.</li>
                   <li>The wallet you bid with goes on the {sk} list, so winners don't need to do anything. To use another wallet, change it until {new Date(sale.deadline * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Everyone else gets their deposit back.</li>
-                  {!!reqs?.length && <li>{sale.partner} only honours winners who meet the requirements below, so do them before you bid.</li>}
+                  {!!reqs?.length && <li>{sale.partner} only honours winners who meet the requirements listed with the bid box, so do them before you bid.</li>}
                   <li>The {sk} list on this page is the list {sale.partner} receives, with a CSV to download.</li>
                 </ol>
                 ) : (

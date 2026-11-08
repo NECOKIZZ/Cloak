@@ -104,7 +104,7 @@ ok((await d.publicClient.readContract({ address: BOOK, abi: cloakSpotBookAbi, fu
 // ── 6. the partner's list ──
 const csv = CloakSpots.csv(winners);
 const rows = csv.trim().split("\n");
-ok(rows.length === 4 && rows[0] === "wallet,bid,bidder,status" && rows.slice(1).every((r) => r.endsWith(",named")), "the CSV has the 3 wallets to whitelist");
+ok(rows.length === 4 && rows[0] === "wallet,bid,bidder,status" && rows.slice(1).every((r) => r.endsWith(",named by winner")), "the CSV has the 3 wallets to whitelist");
 ok(![a, b, c].some((w) => named.includes(w.addr.toLowerCase())), "no bidding wallet is on the whitelist");
 
 // ── 7. after the deadline the list is final ──
