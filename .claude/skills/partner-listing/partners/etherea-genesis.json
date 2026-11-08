@@ -1,0 +1,25 @@
+{
+  "partner": "Etherea Genesis",
+  "kind": "GTD",
+  "spots": 20,
+  "floor": "0.05",
+  "maxPerBid": 1,
+  "closeAt": "2026-11-09T00:00:00+01:00",
+  "walletDays": 1,
+  "name": "Etherea Genesis GTD spots",
+  "symbol": "ETHERGTD",
+  "category": "PFP",
+  "description": "20 Etherea Genesis GTD spots, given to the Cloak community. Etherea Genesis brings a hand-drawn, old-school cartoon art style to the Elysium ecosystem: 2,500 unique characters across six trait slots. Mint is on 10 Nov 2026 on Elysium (price TBA). Bid sealed: nobody sees a bid until bidding closes, the top 20 win, and every winner pays the same price. The wallet you bid from goes on the GTD list, so bid from the wallet you'll mint with.",
+  "links": { "website": "https://ethereagenesis.xyz", "x": "https://x.com/EthereaGenesis" },
+  "requirements": [
+    { "text": "Follow @EthereaGenesis on X", "url": "https://x.com/EthereaGenesis" },
+    { "text": "Like, repost and comment on the collab post", "url": "https://x.com/ethereagenesis/status/2118286819917705560" }
+  ],
+  "_listed": {
+    "drop": "0xbFD23E77165f77235456f7aC79F1D6A380c49E98",
+    "createTx": "0x8ab098069d9c57d576146f38d5e109a27b871f5cdacb61a2cf44be721aa9cbfe",
+    "openTx": "0x54cab784310501cf5876d08344c8fc4db314713cb40161df9c5d47620021ccab",
+    "lister": "0xC565803b278e09E4Fe23CB68F956cE166e877717",
+    "note": "Etherea offered 25 GTD spots; 20 were auctioned. Video clip prompt CHARACTER: black and white rubber-hose cartoon wolf; GESTURE: wink and thumbs up."
+  }
+}
