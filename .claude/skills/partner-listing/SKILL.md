@@ -38,6 +38,10 @@ Defaults when not given: 1 spot per bid, category PFP, winners get 1 day to swap
   contracts. No redeploy needed for new partners.
 - `CloakSpots.rows(winners)` / `CloakSpots.csv(winners)`: each winning bid's first spot defaults to the bidding wallet;
   a winner can replace it on chain with `setWallets`. No wallet appears twice.
+- **Bidding from a fresh wallet** (say, funded from a private balance): the bid form has an optional "Wallet for the
+  GTD/WL list". It's kept only in that browser (`cloak.listWallet.<drop>.<bidId>` in localStorage), never on chain,
+  so losing bids reveal no link between wallets. When the bid wins, the sale page fills it in and the winner confirms
+  it once (`setWallets`). Until then the bidding wallet holds the spot. Tell bidders to confirm from the same browser.
 - Testnet addresses (Elysium testnet, chain 99801) come from `packages/sdk/src/deployments.ts`: `dropFactory`,
   `dropFactoryBlock`, `spotBook`. Read them there; don't hard-code from memory.
 - Bids are opened and settled by Cloak's keeper after the close. Nothing to do by hand.
