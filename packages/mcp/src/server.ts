@@ -47,6 +47,7 @@ import {
   LINK_SHARES_MAX,
   CloakDrops,
   CloakSpots,
+  spotKind,
   type DropBid,
   type DropState,
   type AuctionState,
@@ -72,7 +73,7 @@ Private balances: shield moves HYPE or USDC from the wallet into a private balan
 
 Payment links (HYPE, USDC): create_payment_link puts money in a link anyone can claim (into their private balance, or to any wallet with no gas), optionally locked with a passcode and riddle or split into shares; claim_payment_link claims one (or takes back your own), check_payment_link shows what is left. request_payment_link makes a link that asks to be paid, and pay_payment_request pays one. Amounts are in whole units ("0.5" HYPE), and send, sell and withdraw accept "max".
 
-NFT drops and WL spot sales: list_drops and get_drop show sealed NFT drops (and sales of a partner collection's whitelist spots). place_drop_bid seals a bid at the creator's price or more (WL wallets get their public boost automatically); bids open by themselves after bidding closes and every winner pays one price. claim_drop takes NFTs (optionally to a fresh wallet) and refunds without waiting for the keeper. In a WL spot sale, set_whitelist_wallets names the Elysium wallet to whitelist for each spot won, until the sale's deadline.
+NFT drops and WL spot sales: list_drops and get_drop show sealed NFT drops (and sales of a partner collection's whitelist spots). place_drop_bid seals a bid at the creator's price or more (WL wallets get their public boost automatically); bids open by themselves after bidding closes and every winner pays one price. claim_drop takes NFTs (optionally to a fresh wallet) and refunds without waiting for the keeper. In a WL or GTD spot sale, the winning bid's own wallet goes on the list by default; set_whitelist_wallets swaps in other wallets, one per spot won, until the sale's deadline.
 
 Safety: every action that moves value is checked against per-transaction and daily spending limits (see cloak_info), and any write tool takes dry_run: true to see exactly what would happen without signing anything. Use dry_run first when unsure.`;
 
@@ -495,7 +496,7 @@ export function createCloakServer(settings: Settings, opts: { prover?: () => Pro
       drop: s.address,
       name: s.name,
       symbol: s.symbol,
-      kind: sale ? `WL spot sale for ${sale.partner}` : s.escrow ? "auction of existing NFTs" : "NFT drop",
+      kind: sale ? `${spotKind(det)} spot sale for ${sale.partner}` : s.escrow ? "auction of existing NFTs" : "NFT drop",
       ...(s.escrow ? { collection: s.escrow.collection, tokenIds: s.escrow.tokenIds.map(String), heldInEscrow: `${s.escrow.held} of ${s.supply}` } : {}),
       phase: dropPhase(s),
       ...(s.phase === "gtd" ? { biddingOpens: iso(s.gtdEnd) } : {}),
@@ -510,6 +511,7 @@ export function createCloakServer(settings: Settings, opts: { prover?: () => Pro
       ...(s.settled && !s.failed ? { sold: s.sold, publicWinnersPaid: hype(s.publicPrice), ...(s.hasWl ? { wlWinnersPaid: hype(s.wlPrice) } : {}) } : {}),
       ...(sale ? { walletsDeadline: iso(sale.deadline) } : {}),
       ...(det.description ? { description: det.description } : {}),
+      ...(det.requirements?.length ? { requirements: det.requirements.map((q) => (q.url ? `${q.text} (${q.url})` : q.text)), requirementsNote: "Off-chain tasks the creator or partner checks before honouring a win. Cloak can't check them." } : {}),
       page: `https://cloak.boblabs.tech/app/drop/${s.address}`,
     };
   }
@@ -561,7 +563,7 @@ export function createCloakServer(settings: Settings, opts: { prover?: () => Pro
       const listed = who ? await c.listed(s.address, who) : null;
       const sp = spotsFor();
       const sale = sp ? await sp.sale(s.address) : null;
-      const whitelist = sale && s.phase === "settled" && !s.failed ? (await sp!.winners(s.address)).flatMap((x) => Array.from({ length: x.spots }, (_, i) => ({ bid: x.bidId.toString(), wallet: x.wallets[i] ?? "not named yet" }))) : undefined;
+      const whitelist = sale && s.phase === "settled" && !s.failed ? CloakSpots.rows(await sp!.winners(s.address)).map((r) => ({ bid: r.bidId.toString(), wallet: r.wallet ?? "no wallet yet", source: r.source === "bidder" ? "bidding wallet (default)" : r.source })) : undefined;
       return {
         ...view,
         ...(listed && who ? { listing: { wallet: who, onWl: listed.wl, gtdSpots: listed.gtdSpots, gtdMinted: listed.gtdMinted } } : {}),

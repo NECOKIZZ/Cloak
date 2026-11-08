@@ -35,6 +35,9 @@ const local = (): CloakDeployment => ({
   relayerUrl: env.VITE_RELAYER_URL ?? "",
   circuitsUrl: "/circuits",
   previous: [],
+  dropFactory: (env.VITE_DROP_FACTORY || undefined) as Address | undefined,
+  dropFactoryBlock: BigInt(env.VITE_DROP_FACTORY_BLOCK || 0),
+  spotBook: (env.VITE_SPOT_BOOK || undefined) as Address | undefined,
 });
 const D: CloakDeployment | undefined = IS_LOCAL ? local() : deployments[CHAIN_ID];
 

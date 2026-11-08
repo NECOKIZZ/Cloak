@@ -106,6 +106,32 @@ export function cleanLinks(l: unknown): DropLinks | undefined {
   }
   return Object.keys(out).length ? out : undefined;
 }
+/** What a partner's spots are: WL (a whitelist spot) or GTD (a guaranteed mint). */
+export type SpotKind = "WL" | "GTD";
+/** A spot sale's kind, read from its details (sales made before the field existed are WL). */
+export const spotKind = (d?: { spots?: { kind?: SpotKind } }): SpotKind => (d?.spots?.kind === "GTD" ? "GTD" : "WL");
+
+/** Something bidders must do to keep what they win, like "Follow @partner", with an optional https link. */
+export interface DropRequirement {
+  text: string;
+  url?: string;
+}
+/** Most requirements one drop can list. */
+export const DROP_MAX_REQUIREMENTS = 10;
+/** Keep up to 10 requirements: text up to 200 characters, links only if https (up to 200 characters). */
+export function cleanRequirements(r: unknown): DropRequirement[] | undefined {
+  if (!Array.isArray(r)) return undefined;
+  const out: DropRequirement[] = [];
+  for (const e of r) {
+    const text = typeof e?.text === "string" ? e.text.trim().slice(0, 200) : "";
+    if (!text) continue;
+    const url = typeof e?.url === "string" ? e.url.trim() : "";
+    out.push(/^https:\/\/[^\s"<>]+$/.test(url) && url.length <= 200 ? { text, url } : { text });
+    if (out.length === DROP_MAX_REQUIREMENTS) break;
+  }
+  return out.length ? out : undefined;
+}
+
 const imageOk = (v: unknown): v is string => typeof v === "string" && /^(https:\/\/|ipfs:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/.test(v);
 
 /** What a drop publishes about itself at creation (the DropDetails event). */
@@ -120,8 +146,10 @@ export interface DropDetails {
   description?: string;
   gtd?: GtdEntry[];
   wl?: Address[];
-  /** Set when the drop sells WL spots for a partner collection (see CloakSpots). */
-  spots?: { partner: string };
+  /** What bidders must do to keep what they win (follow, engage, join…). Shown on the drop page. */
+  requirements?: DropRequirement[];
+  /** Set when the drop sells WL or GTD spots for a partner collection (see CloakSpots). Missing kind means WL. */
+  spots?: { partner: string; kind?: SpotKind };
 }
 
 export interface CreateDropOptions {
@@ -152,8 +180,10 @@ export interface CreateDropOptions {
   /** A category shown with the collection, like Art or PFP. */
   category?: string;
   description?: string;
-  /** A WL spot sale: published with the drop so its pages and metadata say so. */
-  spots?: { partner: string };
+  /** What bidders must do to keep what they win. Up to 10, shown on the drop page. */
+  requirements?: DropRequirement[];
+  /** A WL (or GTD) spot sale: published with the drop so its pages and metadata say so. */
+  spots?: { partner: string; kind?: SpotKind };
 }
 
 /** An auction of NFTs that already exist (CloakEscrowDrop): the tokens move into the drop when it's created. */
@@ -177,6 +207,7 @@ export interface CreateEscrowDropOptions {
   links?: DropLinks;
   category?: string;
   description?: string;
+  requirements?: DropRequirement[];
 }
 
 /** Where an escrow drop's tokens come from. */
@@ -329,7 +360,8 @@ export class CloakDrops {
       wlRoot: merkleTree(wlList.map(wlLeaf)).root,
     };
     const links = cleanLinks(o.links);
-    const details: DropDetails & { v: 1 } = { v: 1, ...(o.image ? { image: o.image } : {}), ...(o.banner && imageOk(o.banner) ? { banner: o.banner } : {}), ...(links ? { links } : {}), ...(o.category?.trim() ? { category: o.category.trim().slice(0, 32) } : {}), ...(o.description ? { description: o.description.slice(0, 1000) } : {}), ...(gtdList.length ? { gtd: gtdList } : {}), ...(wlList.length ? { wl: wlList } : {}), ...(o.spots ? { spots: { partner: o.spots.partner.slice(0, 200) } } : {}) };
+    const reqs = cleanRequirements(o.requirements);
+    const details: DropDetails & { v: 1 } = { v: 1, ...(o.image ? { image: o.image } : {}), ...(o.banner && imageOk(o.banner) ? { banner: o.banner } : {}), ...(links ? { links } : {}), ...(o.category?.trim() ? { category: o.category.trim().slice(0, 32) } : {}), ...(o.description ? { description: o.description.slice(0, 1000) } : {}), ...(gtdList.length ? { gtd: gtdList } : {}), ...(wlList.length ? { wl: wlList } : {}), ...(reqs ? { requirements: reqs } : {}), ...(o.spots ? { spots: { partner: o.spots.partner.slice(0, 200), ...(o.spots.kind === "GTD" ? { kind: "GTD" as const } : {}) } } : {}) };
     const detailsJson = JSON.stringify(details);
     if (new TextEncoder().encode(detailsJson).length > DROP_MAX_DETAILS)
       throw new Error("The images and lists are too big to publish together. Link the banner (https:// or ipfs://) instead of uploading it, or use a smaller image.");
@@ -358,7 +390,8 @@ export class CloakDrops {
         description: typeof d.description === "string" ? d.description : undefined,
         gtd: Array.isArray(d.gtd) ? d.gtd.filter((e: GtdEntry) => isAddress(e?.wallet) && Number.isInteger(e?.spots)) : undefined,
         wl: Array.isArray(d.wl) ? d.wl.filter((a: string) => isAddress(a)) : undefined,
-        spots: typeof d.spots?.partner === "string" ? { partner: d.spots.partner } : undefined,
+        requirements: cleanRequirements(d.requirements),
+        spots: typeof d.spots?.partner === "string" ? { partner: d.spots.partner, kind: spotKind(d) } : undefined,
       };
     } catch {
       return {};
@@ -480,7 +513,8 @@ export class CloakDrops {
       wlRoot: merkleTree(wlList.map(wlLeaf)).root,
     };
     const links = cleanLinks(o.links);
-    const details: DropDetails & { v: 1 } = { v: 1, ...(o.image ? { image: o.image } : {}), ...(o.banner && imageOk(o.banner) ? { banner: o.banner } : {}), ...(links ? { links } : {}), ...(o.category?.trim() ? { category: o.category.trim().slice(0, 32) } : {}), ...(o.description ? { description: o.description.slice(0, 1000) } : {}), ...(wlList.length ? { wl: wlList } : {}) };
+    const reqs = cleanRequirements(o.requirements);
+    const details: DropDetails & { v: 1 } = { v: 1, ...(o.image ? { image: o.image } : {}), ...(o.banner && imageOk(o.banner) ? { banner: o.banner } : {}), ...(links ? { links } : {}), ...(o.category?.trim() ? { category: o.category.trim().slice(0, 32) } : {}), ...(o.description ? { description: o.description.slice(0, 1000) } : {}), ...(wlList.length ? { wl: wlList } : {}), ...(reqs ? { requirements: reqs } : {}) };
     const detailsJson = JSON.stringify(details);
     if (new TextEncoder().encode(detailsJson).length > DROP_MAX_DETAILS) throw new Error("The images and lists are too big to publish together. Link the banner (https:// or ipfs://) instead of uploading it, or use a smaller image.");
     const { result, request } = await this.publicClient.simulateContract({

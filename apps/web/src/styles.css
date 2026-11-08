@@ -1031,3 +1031,8 @@ button.asset-row { cursor: pointer; }
 .asset-acts { display: flex; gap: 6px; margin-left: 8px; }
 .btn-xs { min-height: 28px; padding: 0 10px; font-size: 12px; }
 @media (max-width: 560px) { .asset-row { flex-wrap: wrap; } .asset-acts { width: 100%; margin: 4px 0 0 46px; } }
+
+/* the check mark on drops Cloak listed or approved (verified.ts) */
+.verified { display: inline-flex; flex: none; color: var(--signal); vertical-align: middle; position: relative; top: -0.08em; }
+.vname { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.vname > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
