@@ -2,8 +2,8 @@
  * WL spot sales: a partner collection gives out whitelist (or GTD) spots and they're sold as a Cloak drop.
  *
  * The drop's supply is the number of spots and its sealed auction picks the winners (the floor, ties and refunds work
- * as in any drop). CloakSpotBook marks the drop as a spot sale. Once it settles, each winning bid names the wallets to
- * whitelist, one per spot it won, and can change them until the deadline. The book holds the list the partner uses.
+ * as in any drop). CloakSpotBook marks the drop as a spot sale. Once it settles, the wallet behind each winning bid is
+ * on the list by default; a winner can name other wallets instead, one per spot, until the deadline. The book holds the list the partner uses.
  * Each winner also gets the drop's NFT as a receipt.
  */
 import { getAddress, isAddress, type Address, type Hex } from "viem";
@@ -27,6 +27,14 @@ export interface SpotWinner {
   bidder: Address;
   spots: number;
   wallets: Address[];
+}
+
+/** One spot on the partner's list: its wallet, and whether the winner named it or it's the wallet that bid. */
+export interface SpotRow {
+  wallet: Address | null;
+  bidId: bigint;
+  bidder: Address;
+  source: "named" | "bidder" | "none";
 }
 
 export type CreateSpotSaleOptions = Omit<CreateDropOptions, "gtd" | "baseURI" | "spots"> & {
@@ -122,13 +130,35 @@ export class CloakSpots {
   }
 
   /**
-   * The whitelist as CSV, one row per spot: the wallet to whitelist (or blank if the winner hasn't named one), the
-   * bid and the bidder. A partner whitelists the `wallet` column.
+   * The list the partner gets, one row per spot. A winner doesn't have to do anything: the wallet that placed a winning
+   * bid fills its first spot. Naming wallets (setWallets) replaces that. A spot is left empty only when its bid won
+   * more than one spot, or the bidding wallet is already on the list through another bid.
+   */
+  static rows(winners: SpotWinner[]): SpotRow[] {
+    const named = new Set(winners.flatMap((w) => w.wallets.map((a) => a.toLowerCase())));
+    const used = new Set<string>();
+    const out: SpotRow[] = [];
+    for (const w of winners) {
+      for (let i = 0; i < w.spots; i++) {
+        const own = w.wallets[i];
+        if (own) out.push({ wallet: own, bidId: w.bidId, bidder: w.bidder, source: "named" });
+        else if (i === 0 && !w.wallets.length && !named.has(w.bidder.toLowerCase()) && !used.has(w.bidder.toLowerCase())) {
+          used.add(w.bidder.toLowerCase());
+          out.push({ wallet: w.bidder, bidId: w.bidId, bidder: w.bidder, source: "bidder" });
+        } else out.push({ wallet: null, bidId: w.bidId, bidder: w.bidder, source: "none" });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The list as CSV, one row per spot: the wallet to list (blank only if a spot has none), the bid, the bidder, and
+   * where the wallet came from. A partner lists the `wallet` column.
    */
   static csv(winners: SpotWinner[]): string {
+    const status = { named: "named by winner", bidder: "bidding wallet", none: "no wallet yet" } as const;
     const rows = ["wallet,bid,bidder,status"];
-    for (const w of winners)
-      for (let i = 0; i < w.spots; i++) rows.push(`${w.wallets[i] ?? ""},${w.bidId},${w.bidder},${w.wallets[i] ? "named" : "not named yet"}`);
+    for (const r of CloakSpots.rows(winners)) rows.push(`${r.wallet ?? ""},${r.bidId},${r.bidder},${status[r.source]}`);
     return rows.join("\n") + "\n";
   }
 }

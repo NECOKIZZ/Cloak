@@ -246,7 +246,7 @@ export function DropCreate() {
                     setF((x) => ({ ...x, name: x.name === `${partner.trim()} ${spotType} spots` ? `${partner.trim()} ${k} spots`.slice(0, 64) : x.name }));
                   }}>{k === "WL" ? "WL spots" : "GTD spots"}</button>)}
                 </div>
-                <span className="xs mute">{spotType === "GTD" ? "Each winner gets a guaranteed mint on the partner's list." : "Each winner gets a whitelist spot on the partner's list."} Winners name the Elysium wallet to put on it.</span>
+                <span className="xs mute">{spotType === "GTD" ? "Each winner gets a guaranteed mint on the partner's list." : "Each winner gets a whitelist spot on the partner's list."} The wallet each winner bids from goes on it; they can swap in another.</span>
               </div>
               <div className="field"><label><span>Time for winners to name wallets</span><span>after the bids open</span></label><select className="input" value={walletDays} onChange={(e) => setWalletDays(Number(e.target.value))}>{WALLET_DAYS.map((n) => <option key={n} value={n}>{n} day{n > 1 ? "s" : ""}</option>)}</select></div>
             </>
@@ -364,7 +364,7 @@ export function DropCreate() {
             {spots && <div className="row"><span className="mute">Winners name wallets</span><span>for {walletDays} day{walletDays > 1 ? "s" : ""}</span></div>}
             <div className="row"><span className="mute">Cloak fee</span><span>1.5% of sales</span></div>
           </div>
-          {spots ? <p className="note">Bids are sealed to a drand round: nobody, Cloak included, can read one before bidding closes. Once the bids open, each winner names the Elysium wallet to put on the partner's {spotType} list, one per spot, and gets a receipt NFT. The sale page shows the list as it fills, with a CSV for the partner. Creating a sale takes two confirmations.</p> : <p className="note">Bids are sealed to a drand round: nobody, Cloak included, can read one before bidding closes. Cloak's keeper opens them, settles, and delivers NFTs and refunds. Unused GTD spots roll into the auction, and anything left unsold is yours to mint.</p>}
+          {spots ? <p className="note">Bids are sealed to a drand round: nobody, Cloak included, can read one before bidding closes. Once the bids open, each winner's bidding wallet goes on the partner's {spotType} list (they can swap in another wallet until the deadline), and gets a receipt NFT. The sale page shows the list as it fills, with a CSV for the partner. Creating a sale takes two confirmations.</p> : <p className="note">Bids are sealed to a drand round: nobody, Cloak included, can read one before bidding closes. Cloak's keeper opens them, settles, and delivers NFTs and refunds. Unused GTD spots roll into the auction, and anything left unsold is yours to mint.</p>}
           <button className="btn btn-ink btn-lg btn-block" style={{ marginTop: 12 }} disabled={!!busy || imgBusy} onClick={create}>{busy || (wallet ? (spots ? `Create the ${spotType} spot sale` : "Create the drop") : "Connect wallet and create")}</button>
           {err && <div className="err">{err}</div>}
           {!err && plan.problem && <p className="xs mute" style={{ marginTop: 8 }}>{plan.problem}</p>}
