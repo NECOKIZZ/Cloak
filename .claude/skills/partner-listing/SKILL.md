@@ -157,7 +157,7 @@ cp <pfp> $P/assets/pfp.jpg
 bash .claude/skills/cloak-motion/scripts/build.sh $P <scratchpad>/motion/<slug>-collab.mp4 "3 6.6 7.3 7.85 8.6 11.2"
 ```
 
-`check` must show 0 contrast errors; Put the sale link on the end
+`check` must show 0 contrast errors. Put the sale link on the end
 card once the sale exists (shorten the address: `0xbFD2…9E98`). Copy rules from cloak-motion apply (no em dashes,
 colons or semicolons in on-screen text; partner logos are fine because it's a real partnership).
 
