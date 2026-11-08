@@ -1,5 +1,5 @@
 /**
- * WL spot sales: a partner collection gives out whitelist spots and they're sold as a Cloak drop.
+ * WL spot sales: a partner collection gives out whitelist (or GTD) spots and they're sold as a Cloak drop.
  *
  * The drop's supply is the number of spots and its sealed auction picks the winners (the floor, ties and refunds work
  * as in any drop). CloakSpotBook marks the drop as a spot sale. Once it settles, each winning bid names the wallets to
@@ -8,7 +8,7 @@
  */
 import { getAddress, isAddress, type Address, type Hex } from "viem";
 import { cloakSpotBookAbi } from "./abis.js";
-import { CloakDrops, type CreateDropOptions, type DropBid } from "./drops.js";
+import { CloakDrops, type CreateDropOptions, type DropBid, type SpotKind } from "./drops.js";
 
 /** How long winners have to name their wallets, by default, once bids are opened. */
 export const SPOT_DEFAULT_WALLET_DAYS = 3;
@@ -32,6 +32,8 @@ export interface SpotWinner {
 export type CreateSpotSaleOptions = Omit<CreateDropOptions, "gtd" | "baseURI" | "spots"> & {
   /** The partner collection giving the spots. */
   partner: string;
+  /** WL (default) or GTD: what the partner's spots give. Shown on the sale page and the receipts. */
+  kind?: SpotKind;
   /** Days after the reveal window that winners have to name wallets (default 3). */
   walletDays?: number;
   baseURI?: string;
@@ -62,7 +64,7 @@ export class CloakSpots {
     if (!partner || partner.length > 200) throw new Error("Name the partner collection (up to 200 characters).");
     const days = o.walletDays ?? SPOT_DEFAULT_WALLET_DAYS;
     if (!(days >= 1 && days <= SPOT_MAX_WALLET_DAYS)) throw new Error(`Winners get 1 to ${SPOT_MAX_WALLET_DAYS} days to name wallets.`);
-    const { drop, txHash } = await this.drops.create({ ...o, baseURI: o.baseURI ?? "", maxPerBid: o.maxPerBid ?? 1, spots: { partner } });
+    const { drop, txHash } = await this.drops.create({ ...o, baseURI: o.baseURI ?? "", maxPerBid: o.maxPerBid ?? 1, spots: { partner, kind: o.kind } });
     const s = await this.drops.get(drop);
     const deadline = s.revealEnd + Math.round(days * 86400);
     const openTx = await this.open(drop, partner, deadline);

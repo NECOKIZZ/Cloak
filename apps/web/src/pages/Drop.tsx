@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PageSkel } from "../skel";
 import { isAddress, parseEther, type Address, type Hex } from "viem";
-import { CloakDrops, CloakSpots, drandRoundTime, type DropBid, type DropDetails, type DropState, type SpotSale, type SpotWinner } from "@cloakely/sdk";
+import { CloakDrops, CloakSpots, drandRoundTime, spotKind, type DropBid, type DropDetails, type DropState, type SpotSale, type SpotWinner } from "@cloakely/sdk";
 import { addrLink, txLink } from "../config";
 import { collectionInfo, dropsClient, imageSrc, itemPreview, pct, spotsClient, tokenMetas, type ItemMeta } from "../drops";
 import { checked, friendly, Hint } from "../errors";
@@ -9,7 +9,7 @@ import { duration, hype, short } from "../format";
 import { Link } from "../router";
 import { useApp } from "../state";
 import { Icon } from "../ui";
-import { coverStyle, DropArt, phaseBadge, phaseText, soldShare } from "./Drops";
+import { coverStyle, DropArt, Verified, phaseBadge, phaseText, soldShare } from "./Drops";
 import { Who } from "../who";
 
 type Me = { wl: boolean; gtdSpots: number; gtdMinted: number };
@@ -168,6 +168,8 @@ export function Drop({ drop }: { drop: Address }) {
   const gtdLeft = me ? me.gtdSpots - me.gtdMinted : 0;
   const left = s.supply - s.gtdMinted - (s.failed ? 0 : s.sold) - (s.escrow?.returned ?? 0);
   const esc = s.escrow;
+  const sk = spotKind(details);
+  const reqs = details.requirements;
   const myWins = sale ? mine.filter((b) => b.nfts > 0) : [];
   const walletsOpen = !!sale && now < sale.deadline;
   const totalSpots = winners.reduce((a, w) => a + w.spots, 0);
@@ -179,7 +181,7 @@ export function Drop({ drop }: { drop: Address }) {
     const url = URL.createObjectURL(new Blob([CloakSpots.csv(winners)], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${(sale?.partner || s!.name).replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}-whitelist.csv`;
+    a.download = `${(sale?.partner || s!.name).replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}-${sk.toLowerCase()}-list.csv`;
     // attached to the page: some browsers (Safari, Firefox) ignore a click on a detached link
     a.style.display = "none";
     document.body.appendChild(a);
@@ -217,11 +219,11 @@ export function Drop({ drop }: { drop: Address }) {
         <div className="dp-name">
           <div className="dp-pills">
             <span className={`pill ${p.live ? "ok" : ""}`}>{p.live && <span className="dot live" />}{p.text}</span>
-            {sale && <span className="pill">WL spots · {sale.partner}</span>}
+            {sale && <span className="pill">{sk} spots · {sale.partner}</span>}
             {details.category && <span className="pill">{details.category}</span>}
             {esc && <span className={`pill ${esc.held === s.supply || s.settled ? "ok" : "warn"}`} title="Checked on chain: the tokens this auction holds">{s.settled ? `NFT auction · ${s.supply - esc.held} of ${s.supply} out of escrow` : `NFT auction · ${esc.held} of ${s.supply} in escrow`}</span>}
           </div>
-          <h1>{s.name} <span className="mute">{s.symbol}</span></h1>
+          <h1>{s.name} <Verified drop={s.address} creator={s.creator} size={26} /> <span className="mute">{s.symbol}</span></h1>
           {one?.name && <p className="small">{one.name}{colName ? ` from ${colName}` : ""}, token #{String(esc!.tokenIds[0])}</p>}
           <p className="small mute">by {addrLink(s.creator) ? <a className="link" href={addrLink(s.creator)} target="_blank" rel="noreferrer"><Who address={s.creator} /></a> : <Who address={s.creator} />} · {s.supply.toLocaleString()} {sale ? `spot${s.supply > 1 ? "s" : ""}` : esc ? `existing token${s.supply > 1 ? "s" : ""}${colName ? ` from ${colName}` : ""}` : "items"} · Elysium{!sale && s.royaltyBps ? ` · ${pct(s.royaltyBps)} royalty` : ""}</p>
         </div>
@@ -233,7 +235,7 @@ export function Drop({ drop }: { drop: Address }) {
       <div className="dp-stats">
         <div><span className="xs mute">Floor</span><b className="mono">{hype(s.floor)} <small>HYPE</small></b></div>
         {sold && <div><span className="xs mute">Sold at</span><b className="mono">{hype(s.publicPrice)} <small>HYPE</small></b></div>}
-        <div><span className="xs mute">{sale ? "WL spots" : esc ? "Tokens" : "Supply"}</span><b className="mono">{s.supply.toLocaleString()}</b></div>
+        <div><span className="xs mute">{sale ? `${sk} spots` : esc ? "Tokens" : "Supply"}</span><b className="mono">{s.supply.toLocaleString()}</b></div>
         <div><span className="xs mute">Sealed bids</span><b className="mono">{s.bids}</b></div>
         {s.hasGtd && <div><span className="xs mute">GTD minted</span><b className="mono">{s.gtdMinted} <small>at {hype(s.gtdPrice)}</small></b></div>}
         {s.hasWl && <div><span className="xs mute">WL bid boost</span><b className="mono">{pct(s.wlBoostBps)}</b></div>}
@@ -286,11 +288,12 @@ export function Drop({ drop }: { drop: Address }) {
                 <h3 className="dp-h3">How this {kind} works</h3>
                 {sale ? (
                 <ol className="small" style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <li>{sale.partner} gave {s.supply} WL spot{s.supply > 1 ? "s" : ""}. Bid sealed, at {hype(s.floor)} HYPE or more per spot. Nobody sees any bid until bidding closes.</li>
+                  <li>{sale.partner} gave {s.supply} {sk} spot{s.supply > 1 ? "s" : ""}. Bid sealed, at {hype(s.floor)} HYPE or more per spot. Nobody sees any bid until bidding closes.</li>
                   {s.hasWl && <li>WL bids rank {pct(s.wlBoostBps)} higher, and WL winners pay {pct(s.wlBoostBps)} less, never under the floor.</li>}
                   <li>The highest bids win, and every winner pays one price: the lowest winning bid. Ties at that price are drawn at random.</li>
-                  <li>Winners name the wallet to whitelist, one per spot, until {new Date(sale.deadline * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Everyone else gets their deposit back.</li>
-                  <li>The whitelist on this page is the list {sale.partner} receives, with a CSV to download.</li>
+                  <li>Winners name the wallet to put on the {sk} list, one per spot, until {new Date(sale.deadline * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Everyone else gets their deposit back.</li>
+                  {!!reqs?.length && <li>{sale.partner} only honours winners who meet the requirements below, so do them before you bid.</li>}
+                  <li>The {sk} list on this page is the list {sale.partner} receives, with a CSV to download.</li>
                 </ol>
                 ) : (
                 <ol className="small" style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -326,11 +329,12 @@ export function Drop({ drop }: { drop: Address }) {
                 <h3 className="dp-h3">How this {kind} works</h3>
                 {sale ? (
                 <ol className="small" style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <li>{sale.partner} gave {s.supply} WL spot{s.supply > 1 ? "s" : ""}. Bid sealed, at {hype(s.floor)} HYPE or more per spot. Nobody sees any bid until bidding closes.</li>
+                  <li>{sale.partner} gave {s.supply} {sk} spot{s.supply > 1 ? "s" : ""}. Bid sealed, at {hype(s.floor)} HYPE or more per spot. Nobody sees any bid until bidding closes.</li>
                   {s.hasWl && <li>WL bids rank {pct(s.wlBoostBps)} higher, and WL winners pay {pct(s.wlBoostBps)} less, never under the floor.</li>}
                   <li>The highest bids win, and every winner pays one price: the lowest winning bid. Ties at that price are drawn at random.</li>
-                  <li>Winners name the wallet to whitelist, one per spot, until {new Date(sale.deadline * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Everyone else gets their deposit back.</li>
-                  <li>The whitelist on this page is the list {sale.partner} receives, with a CSV to download.</li>
+                  <li>Winners name the wallet to put on the {sk} list, one per spot, until {new Date(sale.deadline * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Everyone else gets their deposit back.</li>
+                  {!!reqs?.length && <li>{sale.partner} only honours winners who meet the requirements below, so do them before you bid.</li>}
+                  <li>The {sk} list on this page is the list {sale.partner} receives, with a CSV to download.</li>
                 </ol>
                 ) : (
                 <ol className="small" style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -347,11 +351,20 @@ export function Drop({ drop }: { drop: Address }) {
             </div>
           </div>
           <div className="dp-panel">
-            <h2 className="dp-title">{sale ? `Bid on ${sale.partner} WL spots` : one?.name ? `Bid on ${one.name}` : `${s.phase === "gtd" && s.hasGtd ? "Mint" : "Bid on"} ${s.name}`}</h2>
+            <h2 className="dp-title">{sale ? `Bid on ${sale.partner} ${sk} spots` : one?.name ? `Bid on ${one.name}` : `${s.phase === "gtd" && s.hasGtd ? "Mint" : "Bid on"} ${s.name}`}</h2>
             <div className="dp-progress">
               <div className="row"><span className="small">{s.settled ? (sale ? "Spots sold" : esc ? "Tokens sold" : "Items sold") : s.phase === "gtd" ? (s.hasGtd ? "GTD window" : "Bidding opens") : s.phase === "bidding" ? "Bidding window" : "Opening the bids"}</span><span className="small mono">{s.settled ? `${s.sold + s.gtdMinted} / ${s.supply}` : s.phase === "gtd" ? `${duration(s.gtdEnd - now)} left` : s.phase === "bidding" ? `${duration(s.commitEnd - now)} left` : `${s.reveals} of ${s.bids} open`}</span></div>
               <div className="dprog lg"><i style={{ width: `${(s.settled ? soldShare(s) : timeShare) * 100}%` }} /></div>
             </div>
+            {!!reqs?.length && (
+              <div className="card dp-reqs" style={{ marginBottom: 12 }}>
+                <div className="card-head"><h3>Requirements</h3><span className="pill warn">to keep what you win</span></div>
+                <ol className="small" style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6, margin: 0 }}>
+                  {reqs.map((q, i) => <li key={i}>{q.url ? <a className="link" href={q.url} target="_blank" rel="noreferrer nofollow">{q.text} ↗</a> : q.text}</li>)}
+                </ol>
+                <p className="xs mute" style={{ marginTop: 8 }}>{sale ? `${sale.partner} checks these before honouring a spot` : "The creator checks these"}; Cloak can't. A winner who skips them may lose the spot, and the bid isn't refunded.</p>
+              </div>
+            )}
             <div className="card dp-stage">
               {s.phase === "gtd" && !s.hasGtd && (
                 <>
@@ -534,7 +547,7 @@ export function Drop({ drop }: { drop: Address }) {
             <div className="dp-extra">
               {sale && s.phase === "settled" && !s.failed && (
                 <>
-                  <div className="card-head" style={{ marginTop: 18 }}><h3>Whitelist</h3><span className="pill">{winnersRaw ? `${namedSpots} of ${totalSpots} named` : "loading…"}</span></div>
+                  <div className="card-head" style={{ marginTop: 18 }}><h3>{sk === "GTD" ? "GTD list" : "Whitelist"}</h3><span className="pill">{winnersRaw ? `${namedSpots} of ${totalSpots} named` : "loading…"}</span></div>
                   <div className="drop-bids">
                     {winners.flatMap((w) => Array.from({ length: w.spots }, (_, i) => (
                       <div key={`${w.bidId}-${i}`}>

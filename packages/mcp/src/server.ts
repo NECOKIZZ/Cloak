@@ -47,6 +47,7 @@ import {
   LINK_SHARES_MAX,
   CloakDrops,
   CloakSpots,
+  spotKind,
   type DropBid,
   type DropState,
   type AuctionState,
@@ -495,7 +496,7 @@ export function createCloakServer(settings: Settings, opts: { prover?: () => Pro
       drop: s.address,
       name: s.name,
       symbol: s.symbol,
-      kind: sale ? `WL spot sale for ${sale.partner}` : s.escrow ? "auction of existing NFTs" : "NFT drop",
+      kind: sale ? `${spotKind(det)} spot sale for ${sale.partner}` : s.escrow ? "auction of existing NFTs" : "NFT drop",
       ...(s.escrow ? { collection: s.escrow.collection, tokenIds: s.escrow.tokenIds.map(String), heldInEscrow: `${s.escrow.held} of ${s.supply}` } : {}),
       phase: dropPhase(s),
       ...(s.phase === "gtd" ? { biddingOpens: iso(s.gtdEnd) } : {}),
@@ -510,6 +511,7 @@ export function createCloakServer(settings: Settings, opts: { prover?: () => Pro
       ...(s.settled && !s.failed ? { sold: s.sold, publicWinnersPaid: hype(s.publicPrice), ...(s.hasWl ? { wlWinnersPaid: hype(s.wlPrice) } : {}) } : {}),
       ...(sale ? { walletsDeadline: iso(sale.deadline) } : {}),
       ...(det.description ? { description: det.description } : {}),
+      ...(det.requirements?.length ? { requirements: det.requirements.map((q) => (q.url ? `${q.text} (${q.url})` : q.text)), requirementsNote: "Off-chain tasks the creator or partner checks before honouring a win. Cloak can't check them." } : {}),
       page: `https://cloak.boblabs.tech/app/drop/${s.address}`,
     };
   }
