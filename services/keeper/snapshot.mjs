@@ -288,7 +288,8 @@ export function startSnapshots(
   }
 
   async function build() {
-    const head = await pub.getBlockNumber();
+    // a few blocks behind the head: the RPC's nodes can be a block or two apart, and a getLogs past one node's head fails
+    const head = (await pub.getBlockNumber()) - 3n;
     const [mkts, list, m] = await Promise.all([markets(), reader.listLaunches(), meta(head)]);
     const launches = await Promise.all(list.map((l) => auction(l.auction)));
     const st = await stats(head, mkts, launches);
