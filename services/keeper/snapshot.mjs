@@ -1,4 +1,4 @@
-// A snapshot of Cloak's public data, rebuilt every 60 s (the site reads it once a minute), so the site can show launches, markets, launch images and
+// A snapshot of Cloak's public data, built on demand (at most once a minute, only while someone asks), so the site can show launches, markets, launch images and
 // Volume in one request instead of hundreds of RPC calls per visitor. Everything here is public chain data; nothing
 // private ever passes through it. The site still reads the chain for anything that moves money.
 //   GET /snapshot → { at, block, markets, launches, meta, stats } (bigints as {"$n":"…"})
@@ -30,7 +30,21 @@ export const toJson = (x) => JSON.stringify(x, (_k, v) => (typeof v === "bigint"
  *                assets?: [{ token, decimals }] (dollar stablecoins such as USDC, counted apart from HYPE),
  *                listDrops?: () => Promise<address[]> }
  */
-export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_EVERY_MS ?? 60_000), log = console.error } = {}) {
+export function startSnapshots(
+  pub,
+  d,
+  {
+    // a request refreshes a copy older than this, in the background, and is answered with the copy at once
+    everyMs = Number(process.env.SNAPSHOT_EVERY_MS ?? 60_000),
+    // a copy older than this is one the site would reject (its limit is 5 minutes): the request waits for the refresh
+    staleMs = Number(process.env.SNAPSHOT_STALE_MS ?? 240_000),
+    // ...but never longer than this (the site gives up at 6 s and reads the chain itself)
+    waitMs = 4_000,
+    // a launch that has settled barely changes (claims, fees owed): read it again this often, not every build
+    finalMs = Number(process.env.SNAPSHOT_FINAL_MS ?? 600_000),
+    log = console.error,
+  } = {},
+) {
   const prev = (d.previous ?? []).filter((p) => p.router);
   const older = [...(d.earlierFactories ?? []), ...prev.map((p) => p.factory)].filter(Boolean);
   const reader = new Cloak(pub, undefined, d.factory, older);
@@ -39,6 +53,21 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
   let hash = null; // of its content (without the time and block), for the ETag
   let builtAt = 0; // the last build that confirmed it, changed or not
   let zipped = null;
+
+  // Outbound bandwidth is what a host like Render counts, and every read is an outbound request. So: build only when a
+  // request finds the copy over `everyMs` old (with nobody asking, nothing is read); read settled launches every
+  // `finalMs`; read a market's fixed fields (pair, vault, name, symbol) once.
+  let building = null;
+  const finals = new Map(); // settled auction → { s, at }
+  const fixed = new Map(); // token → { pair, pool, symbol, name } (null: an asset, not a market)
+  async function auction(a) {
+    const c = finals.get(a);
+    if (c && Date.now() - c.at < finalMs) return c.s;
+    const s = await reader.getAuction(a);
+    if (s.phase === "settled") finals.set(a, { s, at: Date.now() });
+    else finals.delete(a);
+    return s;
+  }
 
   // events are fetched once from their start block, then only the new blocks each round
   const logs = new Map();
@@ -60,12 +89,22 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
     const rows = await Promise.all(
       tokens.map(async (token) => {
         if (token.toLowerCase() === whype.toLowerCase()) return null;
-        const pair = await pub.readContract({ ...c, functionName: "pairOf", args: [token] });
-        if (pair === zeroAddress) return null; // an asset (USDC), not a market
-        const [pool, symbol, name, reserveHype, reserveToken, price, batchable] = await Promise.all([
-          pub.readContract({ ...c, functionName: "poolOf", args: [token] }),
-          pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "symbol" }),
-          pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "name" }),
+        if (!fixed.has(token)) {
+          const pair = await pub.readContract({ ...c, functionName: "pairOf", args: [token] });
+          if (pair === zeroAddress) fixed.set(token, null); // an asset (USDC), not a market
+          else {
+            const [pool, symbol, name] = await Promise.all([
+              pub.readContract({ ...c, functionName: "poolOf", args: [token] }),
+              pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "symbol" }),
+              pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "name" }),
+            ]);
+            fixed.set(token, { pair, pool, symbol, name });
+          }
+        }
+        const f = fixed.get(token);
+        if (!f) return null;
+        const { pair, pool, symbol, name } = f;
+        const [reserveHype, reserveToken, price, batchable] = await Promise.all([
           pub.readContract({ address: pair, abi: cloakPairAbi, functionName: "reserveHype" }),
           pub.readContract({ address: pair, abi: cloakPairAbi, functionName: "reserveToken" }),
           pub.readContract({ address: pair, abi: cloakPairAbi, functionName: "price" }),
@@ -251,9 +290,10 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
   }
 
   async function build() {
-    const head = await pub.getBlockNumber();
+    // a few blocks behind the head: the RPC's nodes can be a block or two apart, and a getLogs past one node's head fails
+    const head = (await pub.getBlockNumber()) - 3n;
     const [mkts, list, m] = await Promise.all([markets(), reader.listLaunches(), meta(head)]);
-    const launches = await Promise.all(list.map((l) => reader.getAuction(l.auction)));
+    const launches = await Promise.all(list.map((l) => auction(l.auction)));
     const st = await stats(head, mkts, launches);
     // a new body (and ETag) only when something in it changed: a browser that has this one gets a bodiless 304
     const content = toJson({ markets: mkts, launches: launches.reverse(), meta: m, stats: st });
@@ -268,13 +308,31 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
     return { head, changed };
   }
 
-  (async function loop() {
-    for (;;) {
+  /** One build at a time: a request that comes while one runs shares it. */
+  function refresh() {
+    building ??= (async () => {
       const t = Date.now();
-      await build().then(({ head, changed }) => log(`[snapshot] block ${head} in ${Date.now() - t} ms, ${body.length} bytes${changed ? "" : " (unchanged)"}`), (e) => log(`[snapshot] failed: ${e.shortMessage ?? e.message}`));
-      await new Promise((r) => setTimeout(r, everyMs));
-    }
-  })();
+      try {
+        const { head, changed } = await build();
+        log(`[snapshot] block ${head} in ${Date.now() - t} ms, ${body.length} bytes${changed ? "" : " (unchanged)"}`);
+      } catch (e) {
+        log(`[snapshot] failed: ${e.shortMessage ?? e.message}`);
+      } finally {
+        building = null;
+      }
+    })();
+    return building;
+  }
+  refresh(); // one at startup, so the first visitor after the keeper wakes isn't kept waiting
 
-  return { get: () => body, gz: () => zipped, etag: () => (hash ? `W/"${hash}"` : null), builtAt: () => builtAt };
+  /** A browser asked: answer from the copy, refreshing it first only if the site would reject it (waiting at most `waitMs`). */
+  async function ready() {
+    const age = Date.now() - builtAt;
+    if (age < everyMs) return;
+    const r = refresh();
+    if (body && age < staleMs) return; // refreshes in the background; this request gets the copy
+    await Promise.race([r, new Promise((ok) => setTimeout(ok, waitMs))]);
+  }
+
+  return { ready, get: () => body, gz: () => zipped, etag: () => (hash ? `W/"${hash}"` : null), builtAt: () => builtAt };
 }

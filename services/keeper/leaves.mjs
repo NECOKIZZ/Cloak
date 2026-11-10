@@ -30,7 +30,8 @@ export function startLeaves(pub, { vaults, vaultsBlock, shared, sharedBlock }) {
       for (const p of ps) track(p, shieldedPoolAbi, vaultsBlock);
     }
     if (shared && sharedBlock !== undefined) track(shared, sharedVaultAbi, sharedBlock);
-    const latest = await pub.getBlockNumber({ cacheTime: 0 });
+    // a few blocks behind the head: the RPC's nodes can be a block or two apart, and a getLogs past one node's head fails
+    const latest = (await pub.getBlockNumber({ cacheTime: 0 })) - 3n;
     await Promise.all(
       [...pools.values()].map(async (p) => {
         if (latest < p.next) return;

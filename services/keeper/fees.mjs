@@ -38,8 +38,8 @@ export function startFeeCollector(o) {
     const fromBlock = head.number > back ? head.number - back : 0n;
     const vaults = await o.vaults();
     const [a, b] = await Promise.all([
-      vaults.length ? o.pub.getLogs({ address: vaults.map((v) => v.pool), event: VAULT[2], fromBlock, toBlock: head.number }) : [],
-      o.shared ? o.pub.getLogs({ address: o.shared, event: SHARED[2], fromBlock, toBlock: head.number }) : [],
+      vaults.length ? o.pub.getLogs({ address: vaults.map((v) => v.pool), event: VAULT[2], fromBlock, toBlock: head.number - 3n }) : [],
+      o.shared ? o.pub.getLogs({ address: o.shared, event: SHARED[2], fromBlock, toBlock: head.number - 3n }) : [],
     ]);
     const newest = [...a, ...b].reduce((m, l) => (l.blockNumber > m ? l.blockNumber : m), -1n);
     if (newest < 0n) return 0;

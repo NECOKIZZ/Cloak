@@ -2,7 +2,7 @@ import { CHAIN_ID, KEEPER_URL, VERSION } from "./config";
 
 /**
  * Two caches for public chain data, so pages show something at once:
- * - the keeper's snapshot (GET /snapshot, rebuilt every 30 s): one request instead of hundreds of RPC calls;
+ * - the keeper's snapshot (GET /snapshot, refreshed on demand at most once a minute): one request instead of hundreds of RPC calls;
  * - this browser's copy of the last result, shown instantly on the next visit while fresh data loads.
  * Only public data goes through either. Anything that moves money is read from the chain.
  */

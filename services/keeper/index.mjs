@@ -257,6 +257,10 @@ async function openVault(auction, token, factory, index) {
 // ───────────── private batch rounds ─────────────
 const batchCursors = new Map(); // batcher → { block, open: "token:round" → [order ids] }
 // the main batcher, then the shared vault's (same rounds, same storage layout and events)
+// The RPC is several nodes that can be a block or two apart: a getLogs up to the head one node reported fails on another
+// with "invalid block range params" (viem: "Missing or invalid parameters"). Read events up to a few blocks behind.
+const HEAD_LAG = 3n;
+
 async function tickBatches() {
   if (BATCHER) await tickBatcher(BATCHER, BATCHER_BLOCK);
   if (SHARED_BATCHER) await tickBatcher(SHARED_BATCHER, SHARED_BATCHER_BLOCK);
@@ -265,7 +269,7 @@ async function tickBatcher(addr, fromBlock) {
   if (!batchCursors.has(addr)) batchCursors.set(addr, { block: fromBlock, open: new Map() });
   const batchCursor = batchCursors.get(addr);
   const c = { address: addr, abi: privateBatcherAbi };
-  const latest = await publicClient.getBlockNumber({ cacheTime: 0 });
+  const latest = (await publicClient.getBlockNumber({ cacheTime: 0 })) - HEAD_LAG; // see HEAD_LAG
   if (latest >= batchCursor.block) {
     const logs = await publicClient.getContractEvents({ ...c, eventName: "OrderPlaced", fromBlock: batchCursor.block, toBlock: latest, strict: true });
     for (const l of logs) {
@@ -797,10 +801,15 @@ createServer((req, res) => {
     return;
   }
   if (req.method === "GET" && path === "/snapshot") {
-    const body = snapshot?.get();
-    if (!body) return send(req, res, 503, { error: "no snapshot yet" });
-    // x-snapshot-at: when the keeper last confirmed it (it can be unchanged for a while: a 304 carries this too)
-    return sendCached(req, res, { json: body, gz: snapshot.gz(), etag: snapshot.etag() }, { "x-snapshot-at": String(snapshot.builtAt()) });
+    if (!snapshot) return send(req, res, 503, { error: "no snapshot yet" });
+    // built on demand: a copy over a minute old is refreshed (in the background, unless the site would reject it)
+    snapshot.ready().then(() => {
+      const body = snapshot.get();
+      if (!body) return send(req, res, 503, { error: "no snapshot yet" });
+      // x-snapshot-at: when the keeper last confirmed it (it can be unchanged for a while: a 304 carries this too)
+      sendCached(req, res, { json: body, gz: snapshot.gz(), etag: snapshot.etag() }, { "x-snapshot-at": String(snapshot.builtAt()) });
+    });
+    return;
   }
   if (path === "/receive" && (req.method === "POST" || req.method === "GET")) {
     if (!receiver) return send(req, res, 404, { error: "receive addresses aren't enabled on this relayer" });
