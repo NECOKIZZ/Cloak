@@ -1,4 +1,4 @@
-// A snapshot of Cloak's public data, rebuilt every 60 s (the site reads it once a minute), so the site can show launches, markets, launch images and
+// A snapshot of Cloak's public data, built on demand (at most once a minute, only while someone asks), so the site can show launches, markets, launch images and
 // Volume in one request instead of hundreds of RPC calls per visitor. Everything here is public chain data; nothing
 // private ever passes through it. The site still reads the chain for anything that moves money.
 //   GET /snapshot → { at, block, markets, launches, meta, stats } (bigints as {"$n":"…"})
@@ -34,9 +34,12 @@ export function startSnapshots(
   pub,
   d,
   {
+    // a request refreshes a copy older than this, in the background, and is answered with the copy at once
     everyMs = Number(process.env.SNAPSHOT_EVERY_MS ?? 60_000),
-    // nobody asked for the snapshot lately: rebuild this often instead (under the site's 5-minute staleness limit)
-    idleMs = Number(process.env.SNAPSHOT_IDLE_MS ?? 240_000),
+    // a copy older than this is one the site would reject (its limit is 5 minutes): the request waits for the refresh
+    staleMs = Number(process.env.SNAPSHOT_STALE_MS ?? 240_000),
+    // ...but never longer than this (the site gives up at 6 s and reads the chain itself)
+    waitMs = 4_000,
     // a launch that has settled barely changes (claims, fees owed): read it again this often, not every build
     finalMs = Number(process.env.SNAPSHOT_FINAL_MS ?? 600_000),
     log = console.error,
@@ -51,11 +54,10 @@ export function startSnapshots(
   let builtAt = 0; // the last build that confirmed it, changed or not
   let zipped = null;
 
-  // Outbound bandwidth is what a host like Render counts, and every read is an outbound request. So: rebuild every
-  // `everyMs` only while someone asked for the snapshot in the last 5 minutes, every `idleMs` otherwise; read settled
-  // launches every `finalMs`; read a market's fixed fields (pair, vault, name, symbol) once.
-  let askedAt = 0;
-  let wake = null;
+  // Outbound bandwidth is what a host like Render counts, and every read is an outbound request. So: build only when a
+  // request finds the copy over `everyMs` old (with nobody asking, nothing is read); read settled launches every
+  // `finalMs`; read a market's fixed fields (pair, vault, name, symbol) once.
+  let building = null;
   const finals = new Map(); // settled auction → { s, at }
   const fixed = new Map(); // token → { pair, pool, symbol, name } (null: an asset, not a market)
   async function auction(a) {
@@ -306,26 +308,31 @@ export function startSnapshots(
     return { head, changed };
   }
 
-  (async function loop() {
-    for (;;) {
+  /** One build at a time: a request that comes while one runs shares it. */
+  function refresh() {
+    building ??= (async () => {
       const t = Date.now();
-      await build().then(({ head, changed }) => log(`[snapshot] block ${head} in ${Date.now() - t} ms, ${body.length} bytes${changed ? "" : " (unchanged)"}`), (e) => log(`[snapshot] failed: ${e.shortMessage ?? e.message}`));
-      const busy = Date.now() - askedAt < 5 * 60_000;
-      await new Promise((r) => {
-        const t = setTimeout(r, busy ? everyMs : Math.max(idleMs, everyMs));
-        // a visitor after a quiet spell: rebuild once the current snapshot is a minute old, not at the end of the idle wait
-        wake = () => (clearTimeout(t), r());
-      });
-      wake = null;
-    }
-  })();
+      try {
+        const { head, changed } = await build();
+        log(`[snapshot] block ${head} in ${Date.now() - t} ms, ${body.length} bytes${changed ? "" : " (unchanged)"}`);
+      } catch (e) {
+        log(`[snapshot] failed: ${e.shortMessage ?? e.message}`);
+      } finally {
+        building = null;
+      }
+    })();
+    return building;
+  }
+  refresh(); // one at startup, so the first visitor after the keeper wakes isn't kept waiting
 
-  /** A browser asked for the snapshot: keep rebuilding at the busy pace. */
-  function asked() {
-    const quiet = Date.now() - askedAt >= 5 * 60_000;
-    askedAt = Date.now();
-    if (quiet && wake && Date.now() - builtAt > everyMs) wake();
+  /** A browser asked: answer from the copy, refreshing it first only if the site would reject it (waiting at most `waitMs`). */
+  async function ready() {
+    const age = Date.now() - builtAt;
+    if (age < everyMs) return;
+    const r = refresh();
+    if (body && age < staleMs) return; // refreshes in the background; this request gets the copy
+    await Promise.race([r, new Promise((ok) => setTimeout(ok, waitMs))]);
   }
 
-  return { asked, get: () => body, gz: () => zipped, etag: () => (hash ? `W/"${hash}"` : null), builtAt: () => builtAt };
+  return { ready, get: () => body, gz: () => zipped, etag: () => (hash ? `W/"${hash}"` : null), builtAt: () => builtAt };
 }

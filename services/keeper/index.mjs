@@ -801,11 +801,15 @@ createServer((req, res) => {
     return;
   }
   if (req.method === "GET" && path === "/snapshot") {
-    snapshot?.asked();
-    const body = snapshot?.get();
-    if (!body) return send(req, res, 503, { error: "no snapshot yet" });
-    // x-snapshot-at: when the keeper last confirmed it (it can be unchanged for a while: a 304 carries this too)
-    return sendCached(req, res, { json: body, gz: snapshot.gz(), etag: snapshot.etag() }, { "x-snapshot-at": String(snapshot.builtAt()) });
+    if (!snapshot) return send(req, res, 503, { error: "no snapshot yet" });
+    // built on demand: a copy over a minute old is refreshed (in the background, unless the site would reject it)
+    snapshot.ready().then(() => {
+      const body = snapshot.get();
+      if (!body) return send(req, res, 503, { error: "no snapshot yet" });
+      // x-snapshot-at: when the keeper last confirmed it (it can be unchanged for a while: a 304 carries this too)
+      sendCached(req, res, { json: body, gz: snapshot.gz(), etag: snapshot.etag() }, { "x-snapshot-at": String(snapshot.builtAt()) });
+    });
+    return;
   }
   if (path === "/receive" && (req.method === "POST" || req.method === "GET")) {
     if (!receiver) return send(req, res, 404, { error: "receive addresses aren't enabled on this relayer" });
