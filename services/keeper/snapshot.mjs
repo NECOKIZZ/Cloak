@@ -30,7 +30,18 @@ export const toJson = (x) => JSON.stringify(x, (_k, v) => (typeof v === "bigint"
  *                assets?: [{ token, decimals }] (dollar stablecoins such as USDC, counted apart from HYPE),
  *                listDrops?: () => Promise<address[]> }
  */
-export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_EVERY_MS ?? 60_000), log = console.error } = {}) {
+export function startSnapshots(
+  pub,
+  d,
+  {
+    everyMs = Number(process.env.SNAPSHOT_EVERY_MS ?? 60_000),
+    // nobody asked for the snapshot lately: rebuild this often instead (under the site's 5-minute staleness limit)
+    idleMs = Number(process.env.SNAPSHOT_IDLE_MS ?? 240_000),
+    // a launch that has settled barely changes (claims, fees owed): read it again this often, not every build
+    finalMs = Number(process.env.SNAPSHOT_FINAL_MS ?? 600_000),
+    log = console.error,
+  } = {},
+) {
   const prev = (d.previous ?? []).filter((p) => p.router);
   const older = [...(d.earlierFactories ?? []), ...prev.map((p) => p.factory)].filter(Boolean);
   const reader = new Cloak(pub, undefined, d.factory, older);
@@ -39,6 +50,22 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
   let hash = null; // of its content (without the time and block), for the ETag
   let builtAt = 0; // the last build that confirmed it, changed or not
   let zipped = null;
+
+  // Outbound bandwidth is what a host like Render counts, and every read is an outbound request. So: rebuild every
+  // `everyMs` only while someone asked for the snapshot in the last 5 minutes, every `idleMs` otherwise; read settled
+  // launches every `finalMs`; read a market's fixed fields (pair, vault, name, symbol) once.
+  let askedAt = 0;
+  let wake = null;
+  const finals = new Map(); // settled auction → { s, at }
+  const fixed = new Map(); // token → { pair, pool, symbol, name } (null: an asset, not a market)
+  async function auction(a) {
+    const c = finals.get(a);
+    if (c && Date.now() - c.at < finalMs) return c.s;
+    const s = await reader.getAuction(a);
+    if (s.phase === "settled") finals.set(a, { s, at: Date.now() });
+    else finals.delete(a);
+    return s;
+  }
 
   // events are fetched once from their start block, then only the new blocks each round
   const logs = new Map();
@@ -60,12 +87,22 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
     const rows = await Promise.all(
       tokens.map(async (token) => {
         if (token.toLowerCase() === whype.toLowerCase()) return null;
-        const pair = await pub.readContract({ ...c, functionName: "pairOf", args: [token] });
-        if (pair === zeroAddress) return null; // an asset (USDC), not a market
-        const [pool, symbol, name, reserveHype, reserveToken, price, batchable] = await Promise.all([
-          pub.readContract({ ...c, functionName: "poolOf", args: [token] }),
-          pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "symbol" }),
-          pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "name" }),
+        if (!fixed.has(token)) {
+          const pair = await pub.readContract({ ...c, functionName: "pairOf", args: [token] });
+          if (pair === zeroAddress) fixed.set(token, null); // an asset (USDC), not a market
+          else {
+            const [pool, symbol, name] = await Promise.all([
+              pub.readContract({ ...c, functionName: "poolOf", args: [token] }),
+              pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "symbol" }),
+              pub.readContract({ address: token, abi: cloakTokenAbi, functionName: "name" }),
+            ]);
+            fixed.set(token, { pair, pool, symbol, name });
+          }
+        }
+        const f = fixed.get(token);
+        if (!f) return null;
+        const { pair, pool, symbol, name } = f;
+        const [reserveHype, reserveToken, price, batchable] = await Promise.all([
           pub.readContract({ address: pair, abi: cloakPairAbi, functionName: "reserveHype" }),
           pub.readContract({ address: pair, abi: cloakPairAbi, functionName: "reserveToken" }),
           pub.readContract({ address: pair, abi: cloakPairAbi, functionName: "price" }),
@@ -253,7 +290,7 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
   async function build() {
     const head = await pub.getBlockNumber();
     const [mkts, list, m] = await Promise.all([markets(), reader.listLaunches(), meta(head)]);
-    const launches = await Promise.all(list.map((l) => reader.getAuction(l.auction)));
+    const launches = await Promise.all(list.map((l) => auction(l.auction)));
     const st = await stats(head, mkts, launches);
     // a new body (and ETag) only when something in it changed: a browser that has this one gets a bodiless 304
     const content = toJson({ markets: mkts, launches: launches.reverse(), meta: m, stats: st });
@@ -272,9 +309,22 @@ export function startSnapshots(pub, d, { everyMs = Number(process.env.SNAPSHOT_E
     for (;;) {
       const t = Date.now();
       await build().then(({ head, changed }) => log(`[snapshot] block ${head} in ${Date.now() - t} ms, ${body.length} bytes${changed ? "" : " (unchanged)"}`), (e) => log(`[snapshot] failed: ${e.shortMessage ?? e.message}`));
-      await new Promise((r) => setTimeout(r, everyMs));
+      const busy = Date.now() - askedAt < 5 * 60_000;
+      await new Promise((r) => {
+        const t = setTimeout(r, busy ? everyMs : Math.max(idleMs, everyMs));
+        // a visitor after a quiet spell: rebuild once the current snapshot is a minute old, not at the end of the idle wait
+        wake = () => (clearTimeout(t), r());
+      });
+      wake = null;
     }
   })();
 
-  return { get: () => body, gz: () => zipped, etag: () => (hash ? `W/"${hash}"` : null), builtAt: () => builtAt };
+  /** A browser asked for the snapshot: keep rebuilding at the busy pace. */
+  function asked() {
+    const quiet = Date.now() - askedAt >= 5 * 60_000;
+    askedAt = Date.now();
+    if (quiet && wake && Date.now() - builtAt > everyMs) wake();
+  }
+
+  return { asked, get: () => body, gz: () => zipped, etag: () => (hash ? `W/"${hash}"` : null), builtAt: () => builtAt };
 }

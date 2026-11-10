@@ -797,6 +797,7 @@ createServer((req, res) => {
     return;
   }
   if (req.method === "GET" && path === "/snapshot") {
+    snapshot?.asked();
     const body = snapshot?.get();
     if (!body) return send(req, res, 503, { error: "no snapshot yet" });
     // x-snapshot-at: when the keeper last confirmed it (it can be unchanged for a while: a 304 carries this too)
